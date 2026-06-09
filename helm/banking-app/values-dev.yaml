@@ -1,0 +1,10 @@
+replicaCount: 1
+
+image:
+  tag: "latest-dev"
+
+service:
+  type: NodePort
+
+ingress:
+  enabled: false

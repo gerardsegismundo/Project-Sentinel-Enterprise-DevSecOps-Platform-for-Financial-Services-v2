@@ -1,0 +1,26 @@
+apiVersion: v2
+name: trading-simulator
+description: Enterprise DevSecOps Banking Application Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - banking
+  - devsecops
+  - eks
+  - fargate
+
+maintainers:
+  - name: Gerard Segismundo
+    email: gerard.segismundo@example.com
+
+dependencies:
+  - name: ingress-nginx
+    version: ">=4.0.0"
+    repository: "https://kubernetes.github.io/ingress-nginx"
+    condition: ingress.enabled
+  - name: aws-load-balancer-controller
+    version: ">=1.5.0"
+    repository: "https://aws.github.io/eks-charts"
+    condition: ingress.enabled

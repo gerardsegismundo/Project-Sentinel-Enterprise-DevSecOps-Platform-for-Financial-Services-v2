@@ -9,9 +9,9 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: banking-app
+  ECR_REPOSITORY: trading-simulator
   IMAGE_TAG: ${{ github.sha }}
-  HELM_CHART_PATH: helm/banking-app
+  HELM_CHART_PATH: helm/trading-simulator
   CLUSTER_DEV: sentinel-dev
   CLUSTER_STAGING: sentinel-staging
   CLUSTER_PROD: sentinel-prod
@@ -117,7 +117,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
 
   deploy-staging:
     name: Deploy Staging
@@ -133,7 +133,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_STAGING }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
 
   integration-test:
     name: Integration Tests
@@ -157,8 +157,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
-      - run: kubectl rollout status deployment/banking-app -n banking --timeout=5m
+      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+      - run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
 
   rollback:
     name: Rollback Production
@@ -174,5 +174,5 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
-      - run: helm rollback banking-app -n banking
-      - run: kubectl rollout status deployment/banking-app -n banking --timeout=5m
+      - run: helm rollback trading-simulator -n banking
+      - run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m

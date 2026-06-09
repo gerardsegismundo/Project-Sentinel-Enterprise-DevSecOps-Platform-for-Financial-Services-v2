@@ -1,0 +1,23 @@
+replicaCount: 2
+
+image:
+  tag: "latest-staging"
+
+service:
+  type: ClusterIP
+
+autoscaling:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: trading-simulator-staging.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - trading-simulator-staging.example.com
+      secretName: trading-simulator-staging-tls
