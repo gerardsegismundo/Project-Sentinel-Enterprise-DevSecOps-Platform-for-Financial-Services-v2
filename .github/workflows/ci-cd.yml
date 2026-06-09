@@ -1,0 +1,276 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: banking-app
+  IMAGE_TAG: ${{ github.sha }}
+  HELM_CHART_PATH: helm/banking-app
+  GITOPS_REPO: gitops
+
+jobs:
+  validate:
+    name: Validate & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Secret scanning
+        uses: trufflesecurity/truffleHog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  sast:
+    name: SAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  iac-scan:
+    name: IaC Security Scan
+    runs-on: ubuntu-latest
+    if: hashFiles('terraform/**') != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Terraform Init
+        run: terraform init -backend=false terraform/
+
+      - name: Terraform Validate
+        run: terraform validate terraform/
+
+      - name: Checkov Scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: false
+
+      - name: tfsec Scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: terraform/
+
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  build-and-push:
+    name: Build and Push Container
+    needs: [validate, sast, iac-scan, dependency-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ env.IMAGE_TAG }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  container-scan:
+    name: Container Vulnerability Scan
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-push.outputs.image-tag }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+  integration-test:
+    name: Integration Tests
+    needs: [build-and-push, container-scan]
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Update kubeconfig for dev cluster
+        run: aws eks update-kubeconfig --name sentinel-dev --region ${{ env.AWS_REGION }}
+
+      - name: Deploy to Dev
+        run: |
+          kubectl set image deployment/banking-app \
+            banking-app=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            -n banking
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [build-and-push, container-scan]
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubeconfig for staging cluster
+        run: aws eks update-kubeconfig --name sentinel-staging --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Helm chart
+        run: |
+          helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} \
+            --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml \
+            --set image.tag=${{ env.IMAGE_TAG }} \
+            --namespace banking \
+            --create-namespace \
+            --wait
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build-and-push, container-scan]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubeconfig for production cluster
+        run: aws eks update-kubeconfig --name sentinel-prod --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Helm chart
+        run: |
+          helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} \
+            --values ${{ env.HELM_CHART_PATH }}/values.yaml \
+            --set image.tag=${{ env.IMAGE_TAG }} \
+            --namespace banking \
+            --create-namespace \
+            --wait
+
+      - name: Post-deployment validation
+        run: |
+          kubectl rollout status deployment/banking-app -n banking --timeout=5m
+          kubectl get pods -n banking
+
+  rollback:
+    name: Rollback Production
+    if: failure()
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name sentinel-prod --region ${{ env.AWS_REGION }}
+
+      - name: Rollback deployment
+        run: |
+          helm rollback banking-app -n banking
+          kubectl rollout status deployment/banking-app -n banking --timeout=5m
