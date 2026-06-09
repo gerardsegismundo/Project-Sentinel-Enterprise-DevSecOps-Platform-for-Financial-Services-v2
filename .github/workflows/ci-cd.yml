@@ -2,21 +2,27 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ develop, main ]
+    branches: [ main, develop ]
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
   ECR_REPOSITORY: banking-app
   IMAGE_TAG: ${{ github.sha }}
   HELM_CHART_PATH: helm/banking-app
-  GITOPS_REPO: gitops
+  CLUSTER_DEV: sentinel-dev
+  CLUSTER_STAGING: sentinel-staging
+  CLUSTER_PROD: sentinel-prod
 
 jobs:
-  validate:
-    name: Validate & Test
+  # ============================================
+  # Stage 1: Code Quality & Security Scanning
+  # ============================================
+  lint-and-test:
+    name: 🧪 Lint & Unit Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,21 +37,37 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Run linter
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
+      - name: Run unit tests
+        run: npm test -- --coverage
 
-      - name: Secret scanning
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  secret-scan:
+    name: 🔒 Secret Scan (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog OSS
         uses: trufflesecurity/truffleHog@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
+          extra_args: --only-verified
 
   sast:
-    name: SAST Scan
+    name: 🛡️ SAST Scan (SonarQube)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -57,10 +79,26 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-  iac-scan:
-    name: IaC Security Scan
+  dependency-scan:
+    name: 📦 Dependency Scan (Snyk)
     runs-on: ubuntu-latest
-    if: hashFiles('terraform/**') != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk
+        uses: snyk/actions@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  # ============================================
+  # Stage 2: Infrastructure Security
+  # ============================================
+  iac-scan:
+    name: ☁️ IaC Security Scan
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,23 +127,12 @@ jobs:
         with:
           working_directory: terraform/
 
-  dependency-scan:
-    name: Dependency Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Snyk
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
-
-  build-and-push:
-    name: Build and Push Container
-    needs: [validate, sast, iac-scan, dependency-scan]
+  # ============================================
+  # Stage 3: Build & Container Security
+  # ============================================
+  build-push:
+    name: 🐳 Build & Push Container
+    needs: [lint-and-test, secret-scan, sast, dependency-scan]
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ env.IMAGE_TAG }}
@@ -123,39 +150,27 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
+      - name: Build Docker image
         run: |
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
 
-  container-scan:
-    name: Container Vulnerability Scan
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Run Trivy vulnerability scanner
+      - name: Scan with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build-and-push.outputs.image-tag }}
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
-  integration-test:
-    name: Integration Tests
-    needs: [build-and-push, container-scan]
+      - name: Push to ECR
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  # ============================================
+  # Stage 4: Deployment
+  # ============================================
+  deploy-dev:
+    name: 🚀 Deploy to Dev
+    needs: build-push
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
@@ -169,21 +184,21 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
 
-      - name: Update kubeconfig for dev cluster
-        run: aws eks update-kubeconfig --name sentinel-dev --region ${{ env.AWS_REGION }}
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
 
-      - name: Deploy to Dev
+      - name: Deploy Helm chart
         run: |
-          kubectl set image deployment/banking-app \
-            banking-app=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
-            -n banking
-
-      - name: Run integration tests
-        run: npm run test:integration
+          helm upgrade --install banking-app ${{ env.HELM_CHART_PATH }} \
+            --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml \
+            --set image.tag=${{ env.IMAGE_TAG }} \
+            --namespace banking \
+            --create-namespace \
+            --wait
 
   deploy-staging:
-    name: Deploy to Staging
-    needs: [build-and-push, container-scan]
+    name: 🚀 Deploy to Staging
+    needs: build-push
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: staging
@@ -197,11 +212,8 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Update kubeconfig for staging cluster
-        run: aws eks update-kubeconfig --name sentinel-staging --region ${{ env.AWS_REGION }}
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_STAGING }} --region ${{ env.AWS_REGION }}
 
       - name: Deploy Helm chart
         run: |
@@ -212,9 +224,17 @@ jobs:
             --create-namespace \
             --wait
 
+  integration-test:
+    name: 🧪 Integration Tests
+    needs: [deploy-dev, deploy-staging]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run integration tests
+        run: npm run test:integration
+
   deploy-production:
-    name: Deploy to Production
-    needs: [build-and-push, container-scan]
+    name: 🚀 Deploy to Production
+    needs: [build-push, integration-test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -228,11 +248,8 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Update kubeconfig for production cluster
-        run: aws eks update-kubeconfig --name sentinel-prod --region ${{ env.AWS_REGION }}
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
 
       - name: Deploy Helm chart
         run: |
@@ -249,27 +266,12 @@ jobs:
           kubectl get pods -n banking
 
   rollback:
-    name: Rollback Production
+    name: 🔄 Rollback Production
+    needs: deploy-production
     if: failure()
-    needs: [deploy-production]
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name sentinel-prod --region ${{ env.AWS_REGION }}
-
       - name: Rollback deployment
         run: |
           helm rollback banking-app -n banking
