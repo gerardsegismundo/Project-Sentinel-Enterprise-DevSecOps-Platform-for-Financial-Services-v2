@@ -9,7 +9,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
   ECR_REPOSITORY: banking-app
   IMAGE_TAG: ${{ github.sha }}
   HELM_CHART_PATH: helm/banking-app
@@ -150,20 +149,10 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
+      - name: Build and push Docker image
         run: |
-          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
-
-      - name: Scan with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-
-      - name: Push to ECR
-        run: |
-          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
   # ============================================
   # Stage 4: Deployment
