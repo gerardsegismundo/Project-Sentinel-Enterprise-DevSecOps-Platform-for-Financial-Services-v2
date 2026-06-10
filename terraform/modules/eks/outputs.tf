@@ -27,13 +27,3 @@ output "oidc_provider_arn" {
   description = "OIDC provider ARN for IRSA"
   value       = module.eks.oidc_provider_arn
 }
-
-output "kubeconfig" {
-  description = "Kubeconfig for cluster access"
-  value = templatefile("${path.module}/kubeconfig.tpl", {
-    cluster_endpoint = module.eks.cluster_endpoint
-    cluster_name     = module.eks.cluster_name
-    certificate      = module.eks.cluster_certificate_authority_data
-  })
-  sensitive = true
-}

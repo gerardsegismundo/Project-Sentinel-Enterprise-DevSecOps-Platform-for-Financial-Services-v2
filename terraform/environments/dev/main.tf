@@ -15,8 +15,16 @@ terraform {
       version = "~> 2.11"
     }
   }
+}
 
-  backend "s3" {}
+locals {
+  name        = "${var.project_name}-${var.environment}"
+  common_tags = {
+    Project     = "Project Sentinel"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+    Owner       = var.owner
+  }
 }
 
 provider "aws" {
@@ -35,25 +43,15 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
-locals {
-  name        = "${var.project_name}-${var.environment}"
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Owner       = var.owner
-  }
-}
-
 module "vpc" {
   source = "../../modules/vpc"
 
-  name              = local.name
-  environment       = var.environment
-  vpc_cidr          = var.vpc_cidr
-  azs               = data.aws_availability_zones.available.names
-  private_subnets   = var.private_subnet_cidrs
-  public_subnets    = var.public_subnet_cidrs
+  name            = local.name
+  environment     = var.environment
+  vpc_cidr        = var.vpc_cidr
+  azs             = data.aws_availability_zones.available.names
+  private_subnets = var.private_subnet_cidrs
+  public_subnets  = var.public_subnet_cidrs
 
   owner = var.owner
 }
@@ -72,9 +70,9 @@ module "ecr" {
 module "iam" {
   source = "../../modules/iam"
 
-  name                      = local.name
-  environment               = var.environment
-  owner                     = var.owner
+  name                       = local.name
+  environment                = var.environment
+  owner                      = var.owner
   create_github_actions_role = true
   github_actions_repo        = "${var.github_org}/${var.github_repo}"
   github_actions_branch      = var.environment == "dev" ? "develop" : "main"
@@ -83,14 +81,14 @@ module "iam" {
 module "eks" {
   source = "../../modules/eks"
 
-  name                      = local.name
-  environment               = var.environment
-  owner                     = var.owner
-  cluster_version           = var.eks_cluster_version
-  vpc_id                    = module.vpc.vpc_id
-  private_subnet_ids        = module.vpc.private_subnet_ids
+  name                        = local.name
+  environment                 = var.environment
+  owner                       = var.owner
+  cluster_version             = var.eks_cluster_version
+  vpc_id                      = module.vpc.vpc_id
+  private_subnet_ids          = module.vpc.private_subnet_ids
   allowed_public_access_cidrs = var.eks_api_allowed_cidrs
-  allowed_cluster_api       = true
+  allowed_cluster_api         = true
 }
 
 resource "aws_iam_role" "github_actions" {
@@ -137,19 +135,9 @@ output "github_actions_role_arn" {
   value = aws_iam_role.github_actions.arn
 }
 
-data "aws_caller_identity" "current" {}
-
-data "aws_eks_cluster" "current" {
-  name = module.eks.cluster_name
-}
-
-data "aws_eks_cluster_auth" "current" {
-  name = module.eks.cluster_name
-}
-
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.current.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.current.certificate_authority[0].data)
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
@@ -166,8 +154,8 @@ provider "kubernetes" {
 
 provider "helm" {
   kubernetes {
-    host                   = data.aws_eks_cluster.current.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.current.certificate_authority[0].data)
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"

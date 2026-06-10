@@ -68,7 +68,7 @@ module "eks" {
 
   eks_managed_node_groups = {
     general = {
-      name           = "${local.name}-general"
+      name           = "ng"
       instance_types = ["m6i.large"]
       min_size       = var.environment == "dev" ? 1 : 2
       max_size       = 5

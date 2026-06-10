@@ -50,7 +50,7 @@ resource "aws_security_group" "vpc_endpoints" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = var.vpc_cidr
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(local.common_tags, { Name = "${local.name}-vpc-endpoints" })
