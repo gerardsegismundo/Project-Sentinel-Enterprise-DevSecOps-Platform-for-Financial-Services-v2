@@ -87,26 +87,31 @@ jobs:
         with:
           working_directory: terraform/
 
-  build-push:
-    name: Build & Push
-    needs: [lint-and-test, secret-scan, sast, dependency-scan, iac-scan]
+  terraform-apply:
+    name: Terraform Apply Dev
+    needs: iac-scan
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
-    outputs:
-      image-tag: ${{ env.IMAGE_TAG }}
+    environment: dev
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - run: docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
-      - run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init terraform/environments/dev/
+      - run: terraform plan -out=tfplan terraform/environments/dev/
+      - run: terraform apply -auto-approve tfplan
+      - run: terraform output -json > terraform-outputs.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: terraform-outputs.json
 
   deploy-dev:
     name: Deploy Dev
-    needs: build-push
+    needs: [build-push, terraform-apply]
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
