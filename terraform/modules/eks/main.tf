@@ -80,8 +80,7 @@ module "eks" {
     }
   }
 
-  enable_cluster_creator_admin_permissions = true
-  enable_irsa                              = true
+  enable_irsa = true
 
   tags = local.common_tags
 }

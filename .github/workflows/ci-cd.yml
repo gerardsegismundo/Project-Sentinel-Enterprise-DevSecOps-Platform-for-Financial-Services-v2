@@ -93,17 +93,21 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
+    outputs:
+      role-arn: ${{ steps.get-role.outputs.role-arn }}
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: hashicorp/setup-terraform@v3
       - run: terraform init terraform/environments/dev/
       - run: terraform plan -out=tfplan terraform/environments/dev/
       - run: terraform apply -auto-approve tfplan
-      - run: terraform output -json > terraform-outputs.json
+      - id: get-role
+        run: echo "role-arn=$(terraform -chdir=terraform/environments/dev output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
         with:
           name: terraform-outputs
@@ -120,7 +124,8 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
       - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
 
@@ -135,7 +140,8 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_STAGING }} --region ${{ env.AWS_REGION }}
       - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
@@ -159,7 +165,8 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
       - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait

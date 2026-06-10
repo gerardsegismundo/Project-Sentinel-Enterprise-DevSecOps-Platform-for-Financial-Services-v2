@@ -31,9 +31,13 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
 locals {
-  name         = "${var.project_name}-${var.environment}"
-  common_tags  = {
+  name        = "${var.project_name}-${var.environment}"
+  common_tags = {
     Project     = "Project Sentinel"
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -42,8 +46,7 @@ locals {
 }
 
 module "vpc" {
-  source  = "../../modules/vpc"
-  version = "1.0.0"
+  source = "../../modules/vpc"
 
   name              = local.name
   environment       = var.environment
@@ -55,9 +58,30 @@ module "vpc" {
   owner = var.owner
 }
 
+module "ecr" {
+  source = "../../modules/ecr"
+
+  repository_name = "trading-simulator"
+  environment     = var.environment
+  owner           = var.owner
+
+  scan_on_push = true
+  encryption   = "AES256"
+}
+
+module "iam" {
+  source = "../../modules/iam"
+
+  name                      = local.name
+  environment               = var.environment
+  owner                     = var.owner
+  create_github_actions_role = true
+  github_actions_repo        = "${var.github_org}/${var.github_repo}"
+  github_actions_branch      = var.environment == "dev" ? "develop" : "main"
+}
+
 module "eks" {
-  source  = "../../modules/eks"
-  version = "1.0.0"
+  source = "../../modules/eks"
 
   name                      = local.name
   environment               = var.environment
@@ -67,6 +91,50 @@ module "eks" {
   private_subnet_ids        = module.vpc.private_subnet_ids
   allowed_public_access_cidrs = var.eks_api_allowed_cidrs
   allowed_cluster_api       = true
+}
+
+resource "aws_iam_role" "github_actions" {
+  name = "${local.name}-github-actions"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = data.aws_iam_openid_connect_provider.github.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${data.aws_iam_openid_connect_provider.github.url}:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            "${data.aws_iam_openid_connect_provider.github.url}:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+          }
+        }
+      }
+    ]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_eks" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ssm" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions.arn
 }
 
 data "aws_caller_identity" "current" {}
