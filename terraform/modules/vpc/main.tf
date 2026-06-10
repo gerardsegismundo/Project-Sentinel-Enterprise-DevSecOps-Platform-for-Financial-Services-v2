@@ -19,23 +19,23 @@ module "vpc" {
   private_subnets = var.private_subnets
   public_subnets  = var.public_subnets
 
-  enable_nat_gateway     = true
-  single_nat_gateway     = var.environment == "dev"
-  enable_dns_hostnames   = true
-  enable_dns_support     = true
-  enable_flow_log        = true
+  enable_nat_gateway       = true
+  single_nat_gateway       = var.environment == "dev"
+  enable_dns_hostnames     = true
+  enable_dns_support       = true
+  enable_flow_log          = true
   flow_log_destination_arn = aws_cloudwatch_log_group.vpc_flow_log.arn
 
   public_subnet_tags = {
-    Name                                        = "${local.name}-public"
-    "kubernetes.io/role/elb"                    = 1
-    "kubernetes.io/cluster/${local.name}-eks"   = "shared"
+    Name                                      = "${local.name}-public"
+    "kubernetes.io/role/elb"                  = 1
+    "kubernetes.io/cluster/${local.name}-eks" = "shared"
   }
 
   private_subnet_tags = {
-    Name                                        = "${local.name}-private"
-    "kubernetes.io/role/internal-elb"           = 1
-    "kubernetes.io/cluster/${local.name}-eks"   = "shared"
+    Name                                      = "${local.name}-private"
+    "kubernetes.io/role/internal-elb"         = 1
+    "kubernetes.io/cluster/${local.name}-eks" = "shared"
   }
 
   tags = local.common_tags
