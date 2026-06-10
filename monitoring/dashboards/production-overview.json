@@ -1,0 +1,175 @@
+{
+  "dashboard": {
+    "title": "Trading Simulator - Production Overview",
+    "tags": ["trading-simulator", "production", "golden-signals"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate (RPS)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",job=\"trading-simulator\"}[1m]))",
+            "legendFormat": "Total RPS",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "rps", "label": "Requests/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Error Rate %",
+        "type": "graph",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{namespace=\"banking\"}[5m])) * 100",
+            "legendFormat": "Error %",
+            "refId": "A"
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": { "type": "gt", "params": [5] },
+              "query": { "params": ["A", "5m", "now"] },
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "Latency P95 (ms)",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[5m])) by (le)) * 1000",
+            "legendFormat": "P95 Latency",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "CPU Utilization %",
+        "type": "graph",
+        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"banking\",pod=~\"trading-simulator-.*\"}[2m])) by (pod) / sum(kube_pod_container_resource_limits_cpu_cores{namespace=\"banking\",pod=~\"trading-simulator-.*\"}) by (pod) * 100",
+            "legendFormat": "{{ pod }}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Memory Utilization %",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"banking\",pod=~\"trading-simulator-.*\"}) by (pod) / sum(kube_pod_container_resource_limits_memory_bytes{namespace=\"banking\",pod=~\"trading-simulator-.*\"}) by (pod) * 100",
+            "legendFormat": "{{ pod }}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Pod Status",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 4, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(kube_pod_status_phase{namespace=\"banking\",pod=~\"trading-simulator-.*\",phase=\"Running\"})",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(kube_pod_status_phase{namespace=\"banking\",pod=~\"trading-simulator-.*\",phase=\"Pending\"})",
+            "refId": "B"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+          "orientation": "auto",
+          "text": {},
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 1, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Active Connections",
+        "type": "graph",
+        "gridPos": { "x": 18, "y": 4, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(node_netstat_Tcp_EstabConn{}) by (instance)",
+            "legendFormat": "{{ instance }}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "EKS Cluster Autoscaler",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 8, "w": 24, "h": 4 },
+        "targets": [
+          {
+            "expr": "kube_deployment_status_replicas{namespace=\"kube-system\",deployment=\"cluster-autoscaler\"}",
+            "legendFormat": "Replicas",
+            "refId": "A"
+          },
+          {
+            "expr": "kube_node_status_condition{condition=\"Ready\",status=\"true\"}",
+            "legendFormat": "Ready Nodes",
+            "refId": "B"
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(kube_pod_status_phase, namespace)",
+          "current": { "text": "banking", "value": "banking" }
+        },
+        {
+          "name": "pod",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(kube_pod_status_phase{namespace=\"$namespace\"}, pod)",
+          "multi": false,
+          "includeAll": true
+        }
+      ]
+    }
+  }
+}

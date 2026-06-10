@@ -1,0 +1,82 @@
+{
+  "dashboard": {
+    "title": "Trading Simulator - Dev Environment",
+    "tags": ["trading-simulator", "dev"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+      "from": "now-15m",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request RPS",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",job=\"trading-simulator\"}[1m]))",
+            "legendFormat": "RPS",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Error Rate %",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{namespace=\"banking\"}[5m])) * 100",
+            "legendFormat": "Error %",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "P95 Latency (ms)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[5m])) by (le)) * 1000",
+            "legendFormat": "P95",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Active Pods",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 4, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(kube_pod_status_phase{namespace=\"banking\",pod=~\"trading-simulator-.*\",phase=\"Running\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" },
+          "orientation": "auto",
+          "text": {},
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 1, "color": "green" }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
