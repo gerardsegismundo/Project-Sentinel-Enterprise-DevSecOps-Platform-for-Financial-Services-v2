@@ -20,9 +20,6 @@ jobs:
   lint-and-test:
     name: Lint & Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -217,11 +214,7 @@ jobs:
   integration-test:
     name: Integration Tests
     needs: [deploy-dev, deploy-staging]
-    if: always()
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -307,7 +300,6 @@ jobs:
           kubectl exec -n banking "$POD" -- wget -q -O- http://localhost:3000/health || echo "Health check completed"
       - name: Run smoke tests
         run: npm run test:smoke || echo "No smoke tests defined"
-        working-directory: app
 
   rollback:
     name: Rollback Production
