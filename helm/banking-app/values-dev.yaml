@@ -1,10 +1,16 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
-  tag: "latest-dev"
+  repository: 866934333672.dkr.ecr.us-east-1.amazonaws.com/trading-simulator
+  tag: "latest"
 
 service:
   type: NodePort
 
 ingress:
   enabled: false
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3000"
+  prometheus.io/path: "/metrics"

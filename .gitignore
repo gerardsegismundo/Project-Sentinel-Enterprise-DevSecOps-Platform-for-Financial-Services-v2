@@ -23,5 +23,11 @@ Thumbs.db
 # Docker
 .dockerignore
 
+# Executables
+*.exe
+
+# Compressed archives
+*.zip
+
 # Misc
 notes.txt

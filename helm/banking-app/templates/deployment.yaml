@@ -6,7 +6,7 @@ metadata:
     app: {{ .Chart.Name }}
     version: {{ .Chart.AppVersion }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.replicaCount | default 1 }}
   selector:
     matchLabels:
       app: {{ .Chart.Name }}
@@ -18,30 +18,30 @@ spec:
   template:
     metadata:
       annotations:
-        prometheus.io/scrape: "{{ .Values.podAnnotations.prometheus.io.scrape }}"
-        prometheus.io/port: "{{ .Values.podAnnotations.prometheus.io.port }}"
-        prometheus.io/path: "{{ .Values.podAnnotations.prometheus.io.path }}"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
       labels:
         app: {{ .Chart.Name }}
         version: {{ .Chart.AppVersion }}
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
-        runAsNonRoot: {{ .Values.podSecurityContext.runAsNonRoot }}
-        runAsUser: {{ .Values.podSecurityContext.runAsUser }}
-        fsGroup: {{ .Values.podSecurityContext.fsGroup }}
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
         seccompProfile:
-          type: {{ .Values.podSecurityContext.seccompProfile.type }}
+          type: RuntimeDefault
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.image.repository | default "123456789012.dkr.ecr.us-east-1.amazonaws.com/trading-simulator" }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           securityContext:
-            allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
-            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
-                {{- toYaml .Values.securityContext.capabilities.drop | nindent 16 }}
+                - ALL
           ports:
             - name: http
               containerPort: 3000
@@ -52,23 +52,28 @@ spec:
             - name: PORT
               value: "3000"
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
           livenessProbe:
             httpGet:
-              path: {{ .Values.livenessProbe.httpGet.path }}
+              path: /health
               port: http
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: {{ .Values.readinessProbe.httpGet.path }}
+              path: /health
               port: http
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -76,6 +81,9 @@ spec:
         - name: tmp
           emptyDir: {}
       nodeSelector:
-        {{- toYaml .Values.nodeSelector | nindent 8 }}
+        kubernetes.io/os: linux
       tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
+        - key: eks.amazonaws.com/compute-type
+          operator: Equal
+          value: fargate
+          effect: NoSchedule

@@ -1,7 +1,7 @@
 replicaCount: 3
 
 image:
-  repository: 123456789012.dkr.ecr.us-east-1.amazonaws.com/trading-simulator
+  repository: 866934333672.dkr.ecr.us-east-1.amazonaws.com/trading-simulator
   pullPolicy: IfNotPresent
   tag: "latest"
 
