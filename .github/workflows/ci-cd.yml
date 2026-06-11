@@ -54,7 +54,6 @@ jobs:
 
   sast:
     name: SAST Scan
-    if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
