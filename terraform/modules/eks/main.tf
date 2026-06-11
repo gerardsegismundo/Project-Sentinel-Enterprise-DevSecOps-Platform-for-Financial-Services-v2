@@ -68,11 +68,13 @@ module "eks" {
 
   eks_managed_node_groups = {
     general = {
-      name           = "ng"
-      instance_types = ["m6i.large"]
-      min_size       = var.environment == "dev" ? 1 : 2
-      max_size       = 5
-      desired_size   = var.environment == "dev" ? 1 : 2
+      name                     = "ng"
+      instance_types           = ["m6i.large"]
+      min_size                 = var.environment == "dev" ? 1 : 2
+      max_size                 = 5
+      desired_size             = var.environment == "dev" ? 1 : 2
+      use_custom_launch_template = false
+      ami_type                 = "AL2_x86_64"
 
       iam_role_additional_policies = {
         AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"

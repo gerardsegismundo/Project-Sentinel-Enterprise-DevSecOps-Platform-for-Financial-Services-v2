@@ -23,8 +23,7 @@ module "vpc" {
   single_nat_gateway       = var.environment == "dev"
   enable_dns_hostnames     = true
   enable_dns_support       = true
-  enable_flow_log          = true
-  flow_log_destination_arn = aws_cloudwatch_log_group.vpc_flow_log.arn
+  enable_flow_log          = false
 
   public_subnet_tags = {
     Name                                      = "${local.name}-public"
