@@ -12,9 +12,9 @@ env:
   ECR_REPOSITORY: trading-simulator
   IMAGE_TAG: ${{ github.sha }}
   HELM_CHART_PATH: helm/banking-app
-  CLUSTER_DEV: sentinel-dev
-  CLUSTER_STAGING: sentinel-staging
-  CLUSTER_PROD: sentinel-prod
+  CLUSTER_DEV: project-sentinel-dev
+  CLUSTER_STAGING: project-sentinel-staging
+  CLUSTER_PROD: project-sentinel-prod
 
 jobs:
   lint-and-test:
