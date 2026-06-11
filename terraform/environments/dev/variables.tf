@@ -49,7 +49,7 @@ variable "eks_cluster_version" {
 variable "eks_api_allowed_cidrs" {
   description = "CIDRs allowed to access EKS API"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["10.0.0.0/8"]
 }
 
 variable "github_org" {

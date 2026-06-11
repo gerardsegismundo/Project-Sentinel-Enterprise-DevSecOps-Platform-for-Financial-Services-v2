@@ -20,7 +20,7 @@ app.get('/api/accounts', (req, res) => {
 });
 
 app.get('/api/accounts/:id', (req, res) => {
-  const account = findAccountById(parseInt(req.params.id));
+  const account = findAccountById(parseInt(req.params.id, 10));
   if (!account) {
     logger.warn('Account not found', { accountId: req.params.id, ip: req.ip });
     return res.status(404).json({ error: 'Account not found' });
@@ -30,8 +30,8 @@ app.get('/api/accounts/:id', (req, res) => {
 
 app.post('/api/transfer', (req, res) => {
   const { fromAccountId, toAccountId, amount } = req.body;
-  
-  if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
+
+  if (!fromAccountId || !toAccountId || amount == null || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: 'Invalid transfer parameters' });
   }
   
