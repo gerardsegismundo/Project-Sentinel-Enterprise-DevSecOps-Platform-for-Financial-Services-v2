@@ -137,6 +137,8 @@ spec:
       containers:
       - name: grafana
         image: grafana/grafana:latest
+        securityContext:
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 3000
           name: http

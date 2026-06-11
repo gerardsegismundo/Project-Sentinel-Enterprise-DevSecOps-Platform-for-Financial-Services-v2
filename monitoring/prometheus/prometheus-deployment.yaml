@@ -238,6 +238,8 @@ spec:
       containers:
       - name: prometheus
         image: prom/prometheus:latest
+        securityContext:
+          allowPrivilegeEscalation: false
         args:
           - "--config.file=/etc/prometheus/prometheus.yml"
           - "--storage.tsdb.path=/prometheus"
