@@ -1,11 +1,11 @@
 locals {
   name = var.name
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Owner       = "Gerard Segismundo"
-  }
+}
+
+module "tags" {
+  source      = "../tags"
+  environment = var.environment
+  owner       = var.owner
 }
 
 module "vpc" {
@@ -37,7 +37,7 @@ module "vpc" {
     "kubernetes.io/cluster/${local.name}-eks" = "shared"
   }
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 resource "aws_security_group" "vpc_endpoints" {
@@ -52,12 +52,12 @@ resource "aws_security_group" "vpc_endpoints" {
     cidr_blocks = [var.vpc_cidr]
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name}-vpc-endpoints" })
+  tags = merge(module.tags.tags, { Name = "${local.name}-vpc-endpoints" })
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   name              = "/aws/vpc-flow-log/${local.name}"
   retention_in_days = 30
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }

@@ -1,0 +1,52 @@
+name: 'Helm Deploy'
+description: 'Deploy a Helm chart to an EKS cluster with environment-specific values'
+
+inputs:
+  aws-region:
+    description: 'AWS region'
+    required: true
+  aws-access-key-id:
+    description: 'AWS access key ID'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS secret access key'
+    required: true
+  cluster-name:
+    description: 'EKS cluster name'
+    required: true
+  chart-path:
+    description: 'Path to the Helm chart'
+    required: true
+  values-file:
+    description: 'Path to the values file'
+    required: true
+  image-tag:
+    description: 'Container image tag'
+    required: true
+  release-name:
+    description: 'Helm release name'
+    required: false
+    default: 'trading-simulator'
+  namespace:
+    description: 'Kubernetes namespace'
+    required: false
+    default: 'banking'
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ inputs.aws-region }}
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+    - shell: bash
+      run: aws eks update-kubeconfig --name ${{ inputs.cluster-name }} --region ${{ inputs.aws-region }}
+    - shell: bash
+      run: |
+        helm upgrade --install ${{ inputs.release-name }} ${{ inputs.chart-path }} \
+          --values ${{ inputs.values-file }} \
+          --set image.tag=${{ inputs.image-tag }} \
+          --namespace ${{ inputs.namespace }} \
+          --create-namespace \
+          --wait

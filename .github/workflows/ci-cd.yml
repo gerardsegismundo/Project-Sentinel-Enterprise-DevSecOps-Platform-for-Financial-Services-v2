@@ -154,7 +154,7 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-   terraform-apply:
+  terraform-apply:
     name: Terraform Apply Dev
     needs: iac-scan
     runs-on: ubuntu-latest
@@ -179,38 +179,41 @@ jobs:
           name: terraform-outputs
           path: terraform-outputs.json
 
-   deploy-dev:
+  deploy-dev:
     name: Deploy Dev
     needs: [container-scan, terraform-apply]
     runs-on: ubuntu-latest
     environment: dev
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/helm-deploy
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+          cluster-name: ${{ env.CLUSTER_DEV }}
+          chart-path: ${{ env.HELM_CHART_PATH }}
+          values-file: ${{ env.HELM_CHART_PATH }}/values-dev.yaml
+          image-tag: ${{ env.IMAGE_TAG }}
 
-   deploy-staging:
+  deploy-staging:
     name: Deploy Staging
     needs: container-scan
     runs-on: ubuntu-latest
     environment: staging
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/helm-deploy
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - uses: azure/setup-kubectl@v3
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_STAGING }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+          cluster-name: ${{ env.CLUSTER_STAGING }}
+          chart-path: ${{ env.HELM_CHART_PATH }}
+          values-file: ${{ env.HELM_CHART_PATH }}/values-staging.yaml
+          image-tag: ${{ env.IMAGE_TAG }}
 
-   integration-test:
+  integration-test:
     name: Integration Tests
     needs: [deploy-dev, deploy-staging]
     runs-on: ubuntu-latest
@@ -223,18 +226,19 @@ jobs:
       - run: npm ci
       - run: npm run test:integration || echo "No integration tests defined"
 
-   dast-scan:
+  dast-scan:
     name: DAST Scan (OWASP ZAP)
     needs: [deploy-dev]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/aws-eks-setup
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
+          cluster-name: ${{ env.CLUSTER_DEV }}
+          install-kubectl: 'false'
       - name: Get service endpoint
         id: service
         run: |
@@ -259,14 +263,15 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/helm-deploy
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - uses: azure/setup-kubectl@v3
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
-      - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
+          cluster-name: ${{ env.CLUSTER_PROD }}
+          chart-path: ${{ env.HELM_CHART_PATH }}
+          values-file: ${{ env.HELM_CHART_PATH }}/values.yaml
+          image-tag: ${{ env.IMAGE_TAG }}
       - run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
 
   validate-deployment:
@@ -277,13 +282,12 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/aws-eks-setup
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - uses: azure/setup-kubectl@v3
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
+          cluster-name: ${{ env.CLUSTER_PROD }}
       - name: Verify pod health
         run: |
           READY=$(kubectl get deployment trading-simulator -n banking -o jsonpath='{.status.readyReplicas}')
@@ -308,12 +312,11 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: ./.github/actions/aws-eks-setup
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - uses: azure/setup-kubectl@v3
-      - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
+          cluster-name: ${{ env.CLUSTER_PROD }}
       - run: helm rollback trading-simulator -n banking
       - run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m

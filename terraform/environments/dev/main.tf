@@ -11,19 +11,19 @@ terraform {
 
 locals {
   name = "${var.project_name}-${var.environment}"
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Owner       = var.owner
-  }
+}
+
+module "tags" {
+  source      = "../../modules/tags"
+  environment = var.environment
+  owner       = var.owner
 }
 
 provider "aws" {
   region = var.aws_region
 
   default_tags {
-    tags = local.common_tags
+    tags = module.tags.tags
   }
 }
 
