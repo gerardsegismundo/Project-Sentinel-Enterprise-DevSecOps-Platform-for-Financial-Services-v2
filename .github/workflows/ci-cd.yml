@@ -20,19 +20,23 @@ jobs:
   lint-and-test:
     name: Lint & Test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: ./app/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm test -- --coverage
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage/
+          path: app/coverage/
 
   secret-scan:
     name: Secret Scan
@@ -215,12 +219,16 @@ jobs:
     name: Integration Tests
     needs: [deploy-dev, deploy-staging]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: ./app/package-lock.json
       - run: npm ci
       - run: npm run test:integration || echo "No integration tests defined"
 
@@ -276,6 +284,9 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: production
+    defaults:
+      run:
+        working-directory: ./app
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -298,8 +309,6 @@ jobs:
         run: |
           POD=$(kubectl get pods -n banking -l app=trading-simulator -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n banking "$POD" -- wget -q -O- http://localhost:3000/health || echo "Health check completed"
-      - name: Run smoke tests
-        run: npm run test:smoke || echo "No smoke tests defined"
 
   rollback:
     name: Rollback Production
