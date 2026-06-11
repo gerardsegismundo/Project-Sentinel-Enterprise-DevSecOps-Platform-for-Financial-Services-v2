@@ -1,0 +1,167 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trading-simulator-network-policy
+  namespace: banking
+spec:
+  podSelector:
+    matchLabels:
+      app: trading-simulator
+  policyTypes:
+    - Ingress
+    - Egress
+  # Ingress: Allow traffic from Ingress controller, monitoring, and same namespace
+  ingress:
+    # Allow from Ingress controller (nginx)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow from Prometheus for metrics scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow from same namespace (other pods in banking)
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow from kube-probes (health checks)
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: kubelet
+      ports:
+        - protocol: TCP
+          port: 3000
+  # Egress: Allow DNS and external API calls, deny by default
+  egress:
+    # Allow DNS queries
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS to external services (AWS APIs, etc.)
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow HTTP to external services (if needed)
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: banking-namespace-isolation
+  namespace: banking
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Default deny all ingress
+  ingress:
+    # Allow within namespace
+    - from:
+        - podSelector: {}
+  # Default deny all egress except specific
+  egress:
+    # Allow DNS in kube-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow Kubernetes API access
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow to same namespace
+    - to:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-external-egress
+  namespace: banking
+spec:
+  podSelector:
+    matchLabels:
+      app: trading-simulator
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS queries to kube-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow access to AWS services only
+    # Note: In production, use more specific IP ranges for AWS services
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-ingress
+  namespace: banking
+spec:
+  podSelector:
+    matchLabels:
+      prometheus.io/scrape: "true"
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Prometheus to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow local traffic for pod-to-pod communication
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3000

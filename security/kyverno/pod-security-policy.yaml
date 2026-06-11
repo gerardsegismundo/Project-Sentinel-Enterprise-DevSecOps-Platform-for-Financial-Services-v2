@@ -1,0 +1,162 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root
+  description: Ensures containers run as non-root user
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: check-runAsNonRoot
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Running as root is not allowed. Set securityContext.runAsNonRoot to true."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  description: Ensures all containers have resource limits defined
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: validate-resources
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "CPU and memory limits are required"
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"
+                  requests:
+                    memory: "?*"
+                    cpu: "?*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-privileged-containers
+  description: Restricts privileged container execution
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: privileged
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Privileged containers are not allowed"
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: false
+    - name: privileged-escalation
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Privilege escalation is not allowed"
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-read-only-filesystem
+  description: Ensures containers have read-only root filesystem
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: check-read-only-fs
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Read-only root filesystem is required"
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-sysctls
+  description: Restricts unsafe sysctls
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: check-sysctls
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Only safe sysctls are allowed"
+        pattern:
+          spec:
+            securityContext:
+              sysctls:
+                - name: "kernel.shm_rmid_forced"
+                - name: "net.ipv4.ip_unprivileged_port_start"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  description: Only allows images from approved registries
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: validate-registries
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Images must come from approved registries: ECR, Docker Hub, Kubernetes"
+        pattern:
+          spec:
+            containers:
+              - image: "866934333672.dkr.ecr.us-east-1.amazonaws.com/* | docker.io/* | k8s.gcr.io/*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-digest
+  description: Requires container images to have a digest tag
+spec:
+  validationFailureAction: audit
+  rules:
+    - name: validate-image-digest
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Image tag must be a digest (sha256:...)"
+        pattern:
+          spec:
+            containers:
+              - image: "*@sha256:*"
