@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      receiver: 'default'
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      routes:
+        # Critical alerts
+        - match:
+            severity: critical
+          receiver: 'critical'
+          repeat_interval: 5m
+
+        # Warning alerts
+        - match:
+            severity: warning
+          receiver: 'warning'
+          repeat_interval: 30m
+
+        # Application alerts
+        - match:
+            component: application
+          receiver: 'application'
+          repeat_interval: 1h
+
+    receivers:
+      - name: 'default'
+        # Default receiver - can add Slack/PagerDuty webhook later
+
+      - name: 'critical'
+        # Configure PagerDuty for critical alerts
+        # pagerduty_configs:
+        #   - service_key: 'PAGERDUTY_SERVICE_KEY_HERE'
+
+      - name: 'warning'
+        # Configure Slack for warning alerts
+        # slack_configs:
+        #   - api_url: 'SLACK_WEBHOOK_URL_HERE'
+        #     channel: '#warnings'
+
+      - name: 'application'
+        # Configure Slack for application alerts
+        # slack_configs:
+        #   - api_url: 'SLACK_WEBHOOK_URL_HERE'
+        #     channel: '#trading-simulator'
+
+    inhibit_rules:
+      # Inhibit warning if critical exists
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'component']
+
+      # Inhibit info if warning exists
+      - source_match:
+          severity: 'warning'
+        target_match:
+          severity: 'info'
+        equal: ['alertname', 'component']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:latest
+        args:
+          - "--config.file=/etc/alertmanager/alertmanager.yml"
+          - "--storage.path=/alertmanager"
+        ports:
+        - containerPort: 9093
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        - name: alertmanager-config
+          mountPath: /etc/alertmanager
+        - name: alertmanager-storage
+          mountPath: /alertmanager
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: alertmanager-config
+        configMap:
+          name: alertmanager-config
+      - name: alertmanager-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  selector:
+    app: alertmanager
+  type: ClusterIP
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: http
