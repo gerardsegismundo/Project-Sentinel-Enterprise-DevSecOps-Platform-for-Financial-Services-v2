@@ -29,3 +29,9 @@ variable "public_subnets" {
   description = "Public subnet CIDRs"
   type        = list(string)
 }
+
+variable "kms_key_arn" {
+  description = "KMS Key ARN for CloudWatch Log encryption"
+  type        = string
+  default     = ""
+}

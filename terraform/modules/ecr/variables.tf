@@ -22,5 +22,11 @@ variable "scan_on_push" {
 variable "encryption" {
   description = "Encryption type for ECR"
   type        = string
-  default     = "AES256"
+  default     = "KMS"
+}
+
+variable "kms_key_arn" {
+  description = "KMS Key ARN for ECR encryption (leave empty for AWS managed key)"
+  type        = string
+  default     = ""
 }

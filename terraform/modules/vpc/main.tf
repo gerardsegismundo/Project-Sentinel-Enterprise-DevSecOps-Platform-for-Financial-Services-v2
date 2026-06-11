@@ -40,24 +40,10 @@ module "vpc" {
   tags = local.common_tags
 }
 
-resource "aws_security_group" "vpc_endpoints" {
-  name_prefix = "${local.name}-vpc-endpoints-"
-  description = "Security group for VPC endpoints"
-  vpc_id      = module.vpc.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  tags = merge(local.common_tags, { Name = "${local.name}-vpc-endpoints" })
-}
-
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   name              = "/aws/vpc-flow-log/${local.name}"
-  retention_in_days = 30
+  retention_in_days = 365
+  kms_key_id        = var.kms_key_arn
 
   tags = local.common_tags
 }
