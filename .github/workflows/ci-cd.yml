@@ -88,8 +88,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
       - run: terraform fmt -check -recursive terraform/
-      - run: terraform init -backend=false terraform/environments/dev/
-      - run: terraform validate terraform/environments/dev/
+      - run: terraform -chdir=terraform/environments/dev/ init -backend=false
+      - run: terraform -chdir=terraform/environments/dev/ validate
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform/
@@ -154,10 +154,9 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-  terraform-apply:
+   terraform-apply:
     name: Terraform Apply Dev
     needs: iac-scan
-    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
     outputs:
@@ -170,9 +169,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: hashicorp/setup-terraform@v3
-      - run: terraform init terraform/environments/dev/
-      - run: terraform plan -out=tfplan terraform/environments/dev/
-      - run: terraform apply -auto-approve tfplan
+      - run: terraform -chdir=terraform/environments/dev/ init
+      - run: terraform -chdir=terraform/environments/dev/ plan -out=tfplan
+      - run: terraform -chdir=terraform/environments/dev/ apply -auto-approve tfplan
       - id: get-role
         run: echo "role-arn=$(terraform -chdir=terraform/environments/dev output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
@@ -180,10 +179,9 @@ jobs:
           name: terraform-outputs
           path: terraform-outputs.json
 
-  deploy-dev:
+   deploy-dev:
     name: Deploy Dev
     needs: [container-scan, terraform-apply]
-    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
     steps:
@@ -196,10 +194,9 @@ jobs:
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_DEV }} --region ${{ env.AWS_REGION }}
       - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-dev.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
 
-  deploy-staging:
+   deploy-staging:
     name: Deploy Staging
     needs: container-scan
-    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -213,10 +210,9 @@ jobs:
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_STAGING }} --region ${{ env.AWS_REGION }}
       - run: helm upgrade --install trading-simulator ${{ env.HELM_CHART_PATH }} --values ${{ env.HELM_CHART_PATH }}/values-staging.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace banking --create-namespace --wait
 
-  integration-test:
+   integration-test:
     name: Integration Tests
     needs: [deploy-dev, deploy-staging]
-    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -227,10 +223,9 @@ jobs:
       - run: npm ci
       - run: npm run test:integration || echo "No integration tests defined"
 
-  dast-scan:
+   dast-scan:
     name: DAST Scan (OWASP ZAP)
     needs: [deploy-dev]
-    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
