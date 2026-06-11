@@ -19,11 +19,11 @@ module "vpc" {
   private_subnets = var.private_subnets
   public_subnets  = var.public_subnets
 
-  enable_nat_gateway       = true
-  single_nat_gateway       = var.environment == "dev"
-  enable_dns_hostnames     = true
-  enable_dns_support       = true
-  enable_flow_log          = false
+  enable_nat_gateway   = true
+  single_nat_gateway   = var.environment == "dev"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  enable_flow_log      = false
 
   public_subnet_tags = {
     Name                                      = "${local.name}-public"
