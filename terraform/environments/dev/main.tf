@@ -10,7 +10,7 @@ terraform {
 }
 
 locals {
-  name        = "${var.project_name}-${var.environment}"
+  name = "${var.project_name}-${var.environment}"
   common_tags = {
     Project     = "Project Sentinel"
     Environment = var.environment
