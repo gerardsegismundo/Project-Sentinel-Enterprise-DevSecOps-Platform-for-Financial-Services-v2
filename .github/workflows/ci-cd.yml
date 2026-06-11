@@ -11,7 +11,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: trading-simulator
   IMAGE_TAG: ${{ github.sha }}
-  HELM_CHART_PATH: helm/trading-simulator
+  HELM_CHART_PATH: helm/banking-app
   CLUSTER_DEV: sentinel-dev
   CLUSTER_STAGING: sentinel-staging
   CLUSTER_PROD: sentinel-prod
@@ -76,8 +76,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
       - run: terraform fmt -check -recursive terraform/
-      - run: terraform init -backend=false terraform/
-      - run: terraform validate terraform/
+      - run: terraform init -backend=false terraform/environments/dev/
+      - run: terraform validate terraform/environments/dev/
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform/
@@ -86,6 +86,22 @@ jobs:
       - uses: aquasecurity/tfsec-action@v1.0.0
         with:
           working_directory: terraform/
+
+  build-push:
+    name: Build & Push
+    needs: [lint-and-test, secret-scan, sast, dependency-scan, iac-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - run: docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
+      - run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
   terraform-apply:
     name: Terraform Apply Dev
@@ -149,6 +165,7 @@ jobs:
   integration-test:
     name: Integration Tests
     needs: [deploy-dev, deploy-staging]
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,7 +200,8 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - uses: azure/setup-kubectl@v3
       - run: aws eks update-kubeconfig --name ${{ env.CLUSTER_PROD }} --region ${{ env.AWS_REGION }}
       - run: helm rollback trading-simulator -n banking
