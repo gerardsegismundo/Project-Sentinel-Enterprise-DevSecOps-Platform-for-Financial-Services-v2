@@ -101,7 +101,7 @@ jobs:
 
   build-push:
     name: Build & Push
-    needs: [lint-and-test, secret-scan, sast, dependency-scan, iac-scan]
+    needs: [lint-and-test, secret-scan, sast, sast-semgrep, dependency-scan, iac-scan]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -114,6 +114,28 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
       - run: docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ./app
       - run: docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  container-scan:
+    name: Container Scan (Grype)
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Install Grype
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+      - name: Scan image
+        run: grype ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} -f json -o grype-report.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grype-report
+          path: grype-report.json
 
   terraform-apply:
     name: Terraform Apply Dev
@@ -143,7 +165,7 @@ jobs:
 
   deploy-dev:
     name: Deploy Dev
-    needs: [build-push, terraform-apply]
+    needs: [container-scan, terraform-apply]
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: dev
@@ -159,7 +181,7 @@ jobs:
 
   deploy-staging:
     name: Deploy Staging
-    needs: build-push
+    needs: container-scan
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: staging
@@ -185,7 +207,7 @@ jobs:
 
   deploy-production:
     name: Deploy Production
-    needs: [build-push, integration-test]
+    needs: [container-scan, integration-test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
