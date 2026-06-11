@@ -172,6 +172,7 @@ jobs:
       - run: terraform -chdir=terraform/environments/dev/ init
       - run: terraform -chdir=terraform/environments/dev/ plan -out=tfplan
       - run: terraform -chdir=terraform/environments/dev/ apply -auto-approve tfplan
+      - run: terraform -chdir=terraform/environments/dev/ output -json > terraform-outputs.json
       - id: get-role
         run: echo "role-arn=$(terraform -chdir=terraform/environments/dev output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
@@ -254,7 +255,7 @@ jobs:
   deploy-production:
     name: Deploy Production
     needs: [container-scan, integration-test, dast-scan]
-    if: github.ref == 'refs/heads/main' && success()
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && success()
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -272,7 +273,7 @@ jobs:
   validate-deployment:
     name: Validate Deployment
     needs: deploy-production
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -303,7 +304,7 @@ jobs:
   rollback:
     name: Rollback Production
     needs: validate-deployment
-    if: failure() && github.ref == 'refs/heads/main'
+    if: failure() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     environment: production
     steps:
