@@ -122,6 +122,7 @@ jobs:
   build-push:
     name: Build & Push
     needs: [lint-and-test, secret-scan, sast, sast-semgrep, dependency-scan, iac-scan]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -177,6 +178,7 @@ jobs:
   terraform-apply:
     name: Terraform Apply Dev
     needs: iac-scan
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: dev
     outputs:
