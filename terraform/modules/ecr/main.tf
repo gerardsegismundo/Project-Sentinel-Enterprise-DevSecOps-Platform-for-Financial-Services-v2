@@ -1,12 +1,12 @@
 locals {
   name = var.repository_name
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Component   = "ECR"
-    Owner       = var.owner
-  }
+}
+
+module "tags" {
+  source      = "../tags"
+  environment = var.environment
+  owner       = var.owner
+  component   = "ECR"
 }
 
 resource "aws_ecr_repository" "main" {
@@ -21,5 +21,5 @@ resource "aws_ecr_repository" "main" {
     encryption_type = var.encryption
   }
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
