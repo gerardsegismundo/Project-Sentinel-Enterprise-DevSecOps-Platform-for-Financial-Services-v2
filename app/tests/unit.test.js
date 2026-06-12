@@ -57,6 +57,12 @@ describe('Accounts API', () => {
     expect(account).toHaveProperty('type');
     expect(account).toHaveProperty('balance');
   });
+
+  it('should return 400 for non-numeric account ID', async () => {
+    const res = await request(app).get('/api/accounts/abc');
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toBe('Invalid account ID format');
+  });
 });
 
 describe('Transfer API', () => {
@@ -124,6 +130,46 @@ describe('Transfer API', () => {
     expect(res.body.message).toBe('Transfer successful');
     expect(res.body.fromBalance).toBe(fromBefore - 100);
     expect(res.body.toBalance).toBe(toBefore + 100);
+  });
+
+  it('should reject self-transfer', async () => {
+    const res = await request(app).post('/api/transfer').send({
+      fromAccountId: 1,
+      toAccountId: 1,
+      amount: 10
+    });
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toBe('Cannot transfer to the same account');
+  });
+
+  it('should reject non-numeric amount', async () => {
+    const res = await request(app).post('/api/transfer').send({
+      fromAccountId: 1,
+      toAccountId: 2,
+      amount: 'fifty'
+    });
+    expect(res.statusCode).toEqual(400);
+  });
+});
+
+describe('JSON Parse Error Handling', () => {
+  it('should return 400 for malformed JSON body', async () => {
+    const res = await request(app)
+      .post('/api/transfer')
+      .set('Content-Type', 'application/json')
+      .send('{"invalid json');
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toBe('Malformed JSON in request body');
+  });
+});
+
+describe('Request Correlation', () => {
+  it('should include X-Request-Id header in responses', async () => {
+    const res = await request(app).get('/api/accounts');
+    expect(res.headers['x-request-id']).toBeDefined();
+    expect(res.headers['x-request-id']).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
   });
 });
 
