@@ -34,6 +34,9 @@
     - role: monitoring-setup
       tags: [monitoring, observability]
 
+    - role: tls-setup
+      tags: [tls, security, certificates]
+
     - role: app-deploy
       tags: [app, deploy]
 

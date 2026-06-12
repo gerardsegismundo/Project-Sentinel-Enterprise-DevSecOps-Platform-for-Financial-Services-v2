@@ -72,6 +72,10 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
        │                                    │              │
        │                                    ▼              ▼
        │                           Deploy Staging ──► DAST Scan
+       │                                    │              │
+       │                                    ├──► Performance Test (k6)
+       │                                    │              │
+       │                                    └──► Synthetic Monitoring
        │                                                │
        │                                                ▼
        └─────────────────────────────────── Deploy Production ──► Validate
@@ -106,7 +110,13 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 | Security Controls          | RBAC, NetworkPolicies, Pod Security Standards (`security/`) |
 | Tracing                    | OpenTelemetry, Jaeger (`monitoring/jaeger/`)              |
 | Centralized Logging        | Fluent Bit, OpenSearch, OpenSearch Dashboards (`monitoring/logging/`) |
-| Governance                 | CIS, NIST, PCI-DSS                                        |
+| Runtime Security           | Falco (`security/falco/`)                                |
+| TLS / Certificates         | cert-manager, Let's Encrypt (`security/tls/`)            |
+| Secrets Management         | External Secrets Operator → AWS Secrets Manager           |
+| Performance Testing        | k6 (`app/tests/performance/`)                            |
+| Synthetic Monitoring       | Custom Node.js probes (`app/tests/synthetic/`)           |
+| Incident Management        | PagerDuty, ServiceNow (AlertManager webhooks)            |
+| Governance                 | CIS, NIST 800-53, PCI-DSS, SOC 2 (`docs/compliance/`)   |
 
 ---
 
@@ -123,6 +133,8 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 │   │   ├── accounts.js        # Account data and helpers
 │   │   └── errors.js          # Error handling middleware
 │   ├── tests/                 # Jest unit and integration tests (30 tests)
+│   │   ├── performance/       # k6 load test scripts (Golden Signals SLOs)
+│   │   └── synthetic/         # Synthetic health monitoring probes
 │   ├── package.json           # Dependencies (express, helmet, Winston, OpenTelemetry)
 │   └── Dockerfile             # Multi-stage container image (API only)
 ├── client/                    # Next.js + TypeScript frontend (banking dashboard)
@@ -134,11 +146,14 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 │   └── package.json           # Next.js 16, React 19, Tailwind CSS 4, TypeScript
 ├── Dockerfile                 # Full-stack production build (client + server)
 ├── terraform/                 # Infrastructure as Code
-│   ├── environments/dev/      # Dev environment configuration
+│   ├── environments/          # Per-environment configuration
+│   │   ├── dev/               # Development (10.0.0.0/16)
+│   │   ├── staging/           # Staging (10.1.0.0/16, S3 backend)
+│   │   └── production/        # Production (10.2.0.0/16, S3 backend)
 │   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, kms, tags)
 ├── ansible/                   # Configuration management
 │   ├── playbooks/             # Ansible playbooks (site, eks, app, secrets, monitoring, hardening)
-│   ├── roles/                 # Roles: eks-node-config, app-deploy, secrets-manager, monitoring-setup, security-hardening
+│   ├── roles/                 # Roles: eks-node-config, app-deploy, secrets-manager, monitoring-setup, security-hardening, tls-setup
 │   ├── inventory/             # Environment inventories (dev, production)
 │   └── group_vars/            # Variables per environment
 ├── helm/
@@ -159,6 +174,7 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 │   ├── network-policies/      # Network segmentation policies
 │   ├── kyverno/               # Policy-as-code (prepared, not applied)
 │   ├── falco/                 # Runtime security (DaemonSet + banking-specific rules)
+│   ├── tls/                   # cert-manager, ClusterIssuers, TLS enforcement policies
 │   └── secrets/               # External Secrets Operator manifests
 ├── monitoring/                # Observability stack
 │   ├── prometheus/            # Prometheus config, rules, and deployment
@@ -178,12 +194,13 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 │   ├── disaster-recovery.md   # DR procedures (5 scenarios)
 │   └── security-incident.md   # Security incident response
 ├── docs/                      # Documentation
-│   ├── compliance/            # CIS, PCI-DSS, NIST, SOC2 control mappings
+│   ├── compliance/            # CIS, PCI-DSS, NIST 800-53, SOC 2 control mappings
+│   ├── demo/                  # Final demonstration guide & materials
 │   ├── operations.md          # Operational guide
 │   ├── cost-optimization.md   # AWS cost analysis & recommendations
 │   └── architecture-decisions.md  # ADRs
 └── .github/workflows/
-    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline (17 jobs)
+    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline (19 jobs)
 ```
 
 ---

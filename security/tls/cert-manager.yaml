@@ -1,0 +1,98 @@
+---
+# cert-manager namespace and CRDs are installed via Helm:
+#   helm repo add jetstack https://charts.jetstack.io
+#   helm install cert-manager jetstack/cert-manager \
+#     --namespace cert-manager --create-namespace \
+#     --set installCRDs=true \
+#     --version v1.14.4
+#
+# This file defines the ClusterIssuers and Certificates for the banking app.
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@project-sentinel.example.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@project-sentinel.example.com
+    privateKeySecretRef:
+      name: letsencrypt-production-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+      - dns01:
+          route53:
+            region: us-east-1
+            # Uses IRSA (IAM Roles for Service Accounts) — no static credentials
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: banking-app-tls
+  namespace: banking
+spec:
+  secretName: banking-app-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - trading-simulator.example.com
+    - api.trading-simulator.example.com
+  duration: 2160h    # 90 days
+  renewBefore: 360h  # Renew 15 days before expiry
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: monitoring
+spec:
+  secretName: grafana-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - grafana.project-sentinel.example.com
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jaeger-tls
+  namespace: tracing
+spec:
+  secretName: jaeger-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - jaeger.project-sentinel.example.com
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
