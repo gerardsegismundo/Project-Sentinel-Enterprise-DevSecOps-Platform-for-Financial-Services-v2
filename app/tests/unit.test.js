@@ -44,10 +44,10 @@ describe('Accounts API', () => {
     expect(res.body.error).toBe('Account not found');
   });
 
-  it('should return 404 for non-numeric account id', async () => {
+  it('should return 400 for non-numeric account id', async () => {
     const res = await request(app).get('/api/accounts/abc');
-    expect(res.statusCode).toEqual(404);
-    expect(res.body.error).toBe('Account not found');
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toBe('Invalid account ID format');
   });
 
   it('should include all expected fields in the account list', async () => {
