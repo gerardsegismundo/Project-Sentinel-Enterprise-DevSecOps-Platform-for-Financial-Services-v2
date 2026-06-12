@@ -237,7 +237,9 @@ spec:
       serviceAccountName: prometheus
       containers:
       - name: prometheus
-        image: prom/prometheus:v2.52.0
+        image: prom/prometheus:latest
+        securityContext:
+          allowPrivilegeEscalation: false
         args:
           - "--config.file=/etc/prometheus/prometheus.yml"
           - "--storage.tsdb.path=/prometheus"

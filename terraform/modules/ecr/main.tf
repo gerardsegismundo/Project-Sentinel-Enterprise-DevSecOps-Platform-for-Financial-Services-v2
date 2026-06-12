@@ -19,6 +19,7 @@ resource "aws_ecr_repository" "main" {
 
   encryption_configuration {
     encryption_type = var.encryption
+    kms_key         = var.kms_key_arn
   }
 
   tags = module.tags.tags
