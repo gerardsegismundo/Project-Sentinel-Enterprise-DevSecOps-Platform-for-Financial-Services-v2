@@ -1,5 +1,2 @@
-checkov:
-  skip-check:
-    - CKV_TF_1
 skip-check:
   - CKV_TF_1
