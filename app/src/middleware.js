@@ -7,8 +7,10 @@ const logger = require('./logger');
 
 function applyMiddleware(app) {
   app.use(helmet());
-  app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*' }));
-  app.use(express.json());
+  app.use(cors({
+    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false
+  }));
+  app.use(express.json({ limit: '100kb' }));
 
   app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') {
