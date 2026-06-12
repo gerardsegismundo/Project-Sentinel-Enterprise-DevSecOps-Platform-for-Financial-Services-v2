@@ -119,6 +119,10 @@ jobs:
       - run: terraform fmt -check -recursive terraform/
       - run: terraform -chdir=terraform/environments/dev/ init -backend=false
       - run: terraform -chdir=terraform/environments/dev/ validate
+      - run: terraform -chdir=terraform/environments/staging/ init -backend=false
+      - run: terraform -chdir=terraform/environments/staging/ validate
+      - run: terraform -chdir=terraform/environments/production/ init -backend=false
+      - run: terraform -chdir=terraform/environments/production/ validate
       - uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform/
@@ -436,9 +440,74 @@ jobs:
           name: zap-report
           path: report_html.html
 
+  performance-test:
+    name: Performance Test (k6)
+    needs: [deploy-dev]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./app/package-lock.json
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 -y
+      - name: Start local app
+        working-directory: ./app
+        run: |
+          npm ci
+          node src/index.js &
+          sleep 3
+      - name: Run k6 load test
+        run: k6 run --out json=k6-results.json app/tests/performance/load-test.js
+        env:
+          TARGET_URL: 'http://localhost:3000'
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-performance-report
+          path: |
+            k6-results.json
+            performance-report.json
+
+  synthetic-monitoring:
+    name: Synthetic Monitoring
+    needs: [deploy-dev]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./app/package-lock.json
+      - name: Start local app
+        working-directory: ./app
+        run: |
+          npm ci
+          node src/index.js &
+          sleep 3
+      - name: Run synthetic health checks
+        run: node app/tests/synthetic/health-check.js
+        env:
+          TARGET_URL: 'http://localhost:3000'
+          SLO_LATENCY_MS: '500'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-monitoring-report
+          path: synthetic-report.json
+
   deploy-production:
     name: Deploy Production
-    needs: [container-scan, integration-test, dast-scan]
+    needs: [container-scan, integration-test, dast-scan, performance-test, synthetic-monitoring]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     environment: production
