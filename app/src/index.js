@@ -105,8 +105,8 @@ app.post('/api/transfer', (req, res) => {
   res.json({ message: 'Transfer successful', fromBalance: fromAccount.balance, toBalance: toAccount.balance });
 });
 
-// Serve React client build when available
-const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'build');
+// Serve Next.js static export when available
+const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'out');
 const clientIndexPath = path.join(clientBuildPath, 'index.html');
 if (fs.existsSync(clientIndexPath)) {
   app.use(express.static(clientBuildPath));

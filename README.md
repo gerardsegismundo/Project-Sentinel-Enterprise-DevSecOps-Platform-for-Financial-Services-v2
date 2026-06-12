@@ -6,7 +6,7 @@
 
 Project Sentinel is a cloud-native DevSecOps platform designed for financial services applications. It demonstrates secure software delivery by integrating Infrastructure as Code (IaC), Kubernetes, CI/CD automation, security scanning, compliance controls, and GitOps deployment strategies on AWS.
 
-The core workload is a **full-stack banking application** with a React frontend and Express.js API backend, featuring token-based authentication, hardened security controls (helmet, CORS, rate limiting, structured logging via Winston), and production-ready DevSecOps practices.
+The core workload is a **full-stack banking application** with a Next.js (TypeScript) frontend and Express.js API backend, featuring token-based authentication, a modern dark-mode UI with glassmorphism design, hardened security controls (helmet, CORS, rate limiting, structured logging via Winston), and production-ready DevSecOps practices.
 
 ---
 
@@ -115,7 +115,7 @@ The core workload is a **full-stack banking application** with a React frontend 
 ```text
 ├── app/                       # Express.js API server
 │   ├── src/
-│   │   ├── index.js           # Main application server (serves React build in production)
+│   │   ├── index.js           # Main application server (serves Next.js static export in production)
 │   │   ├── auth.js            # Token-based authentication middleware
 │   │   ├── tracing.js         # OpenTelemetry SDK initialization
 │   │   ├── middleware.js      # Express middleware (helmet, CORS, rate limiting)
@@ -125,12 +125,13 @@ The core workload is a **full-stack banking application** with a React frontend 
 │   ├── tests/                 # Jest unit and integration tests (30 tests)
 │   ├── package.json           # Dependencies (express, helmet, Winston, OpenTelemetry)
 │   └── Dockerfile             # Multi-stage container image (API only)
-├── client/                    # React frontend (banking dashboard)
+├── client/                    # Next.js + TypeScript frontend (banking dashboard)
 │   ├── src/
-│   │   ├── App.js             # Main app with login, dashboard, transfer, health views
-│   │   ├── api.js             # API client with token management
-│   │   └── index.css          # Responsive banking UI styles
-│   └── package.json           # React 19, react-scripts (proxy → Express :3000)
+│   │   ├── app/page.tsx       # Main app with login, dashboard, transfer, health views
+│   │   ├── app/layout.tsx     # Root layout with Geist font and dark theme
+│   │   ├── app/globals.css    # Tailwind v4 design system (dark-mode-first)
+│   │   └── lib/api.ts         # Typed API client with token management
+│   └── package.json           # Next.js 16, React 19, Tailwind CSS 4, TypeScript
 ├── Dockerfile                 # Full-stack production build (client + server)
 ├── terraform/                 # Infrastructure as Code
 │   ├── environments/dev/      # Dev environment configuration
@@ -289,13 +290,13 @@ npm test
 npm start          # runs on http://localhost:3000
 ```
 
-### React Frontend
+### Next.js Frontend
 
 ```bash
 cd client
 npm install
-npm start          # runs on http://localhost:3001, proxies API to :3000
-npm run build      # production build (served by Express in production)
+npm run dev        # runs on http://localhost:3000 (uses NEXT_PUBLIC_API_URL for API calls)
+npm run build      # static export to out/ (served by Express in production)
 ```
 
 ### Authentication

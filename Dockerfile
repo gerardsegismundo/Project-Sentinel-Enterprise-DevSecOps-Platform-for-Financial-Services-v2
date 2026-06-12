@@ -1,5 +1,5 @@
 # Full-stack Dockerfile (build context: repo root)
-# Builds both React client and Express server into a single image
+# Builds both Next.js client and Express server into a single image
 
 FROM node:20-alpine AS client-builder
 WORKDIR /client
@@ -19,7 +19,7 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodeapp -u 1001
 WORKDIR /app
 COPY --from=server-builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
 COPY --from=server-builder --chown=nodeapp:nodejs /app/src ./src
-COPY --from=client-builder --chown=nodeapp:nodejs /client/build ../client/build
+COPY --from=client-builder --chown=nodeapp:nodejs /client/out ../client/out
 USER nodeapp
 EXPOSE 3000
 ENV NODE_ENV=production \
