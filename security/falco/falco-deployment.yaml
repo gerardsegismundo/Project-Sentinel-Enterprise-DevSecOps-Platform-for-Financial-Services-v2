@@ -133,10 +133,9 @@ spec:
       containers:
         - name: falco
           image: falcosecurity/falco-no-driver:0.37.1
-          # nosemgrep: yaml.kubernetes.security.allow-privilege-escalation
           securityContext:
             privileged: true
-            allowPrivilegeEscalation: true
+            allowPrivilegeEscalation: true # nosemgrep: yaml.kubernetes.security.allow-privilege-escalation-true.allow-privilege-escalation-true
           args:
             - /usr/bin/falco
             - --cri
