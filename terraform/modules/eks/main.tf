@@ -1,12 +1,12 @@
 locals {
   name = var.name
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Component   = "EKS"
-    Owner       = var.owner
-  }
+}
+
+module "tags" {
+  source      = "../tags"
+  environment = var.environment
+  owner       = var.owner
+  component   = "EKS"
 }
 
 module "eks" {
@@ -84,7 +84,7 @@ module "eks" {
 
   enable_irsa = true
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 data "aws_iam_policy_document" "fargate_assume_role" {
@@ -114,7 +114,7 @@ module "irsa_fargate" {
     }
   }
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 module "irsa_ebs" {
@@ -133,7 +133,7 @@ module "irsa_ebs" {
     }
   }
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 resource "aws_security_group_rule" "cluster_api" {

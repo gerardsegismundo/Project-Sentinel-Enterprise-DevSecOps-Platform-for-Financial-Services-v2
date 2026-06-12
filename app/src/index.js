@@ -1,48 +1,14 @@
 const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const winston = require('winston');
+const logger = require('./logger');
+const { applyMiddleware } = require('./middleware');
+const { accounts, findAccountById, sanitizeAccount } = require('./accounts');
+const { notFoundHandler, globalErrorHandler } = require('./errors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-const logger = winston.createLogger({
-  level: NODE_ENV === 'production' ? 'info' : 'debug',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'banking-app', environment: NODE_ENV },
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    })
-  ]
-});
-
-app.use(helmet());
-app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') || '*' }));
-app.use(express.json());
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests', retryAfter: '15 minutes' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-app.use('/api/', limiter);
-
-const accounts = [
-  { id: 1, accountNumber: '****1234', type: 'checking', balance: 1500.00 },
-  { id: 2, accountNumber: '****5678', type: 'savings', balance: 5000.00 }
-];
+applyMiddleware(app);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: process.env.npm_package_version });
@@ -50,57 +16,103 @@ app.get('/health', (req, res) => {
 
 app.get('/api/accounts', (req, res) => {
   logger.info('Accounts endpoint accessed', { ip: req.ip });
-  res.json({ accounts: accounts.map(a => ({ id: a.id, type: a.type, balance: a.balance })) });
+  res.json({ accounts: accounts.map(sanitizeAccount) });
 });
 
 app.get('/api/accounts/:id', (req, res) => {
-  const account = accounts.find(a => a.id === parseInt(req.params.id));
+  const parsed = parseInt(req.params.id, 10);
+  if (Number.isNaN(parsed)) {
+    logger.warn('Invalid account ID format', { accountId: req.params.id, ip: req.ip, requestId: req.requestId });
+    return res.status(400).json({ error: 'Invalid account ID format' });
+  }
+  const account = findAccountById(parsed);
   if (!account) {
-    logger.warn('Account not found', { accountId: req.params.id, ip: req.ip });
+    logger.warn('Account not found', { accountId: req.params.id, ip: req.ip, requestId: req.requestId });
     return res.status(404).json({ error: 'Account not found' });
   }
-  res.json({ account: { id: account.id, type: account.type, balance: account.balance } });
+  res.json({ account: sanitizeAccount(account) });
 });
 
 app.post('/api/transfer', (req, res) => {
   const { fromAccountId, toAccountId, amount } = req.body;
   
-  if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
+  if (!fromAccountId || !toAccountId || !amount || typeof amount !== 'number' || amount <= 0) {
+    logger.warn('Invalid transfer parameters', { fromAccountId, toAccountId, amount, ip: req.ip, requestId: req.requestId });
     return res.status(400).json({ error: 'Invalid transfer parameters' });
   }
+
+  if (fromAccountId === toAccountId) {
+    logger.warn('Self-transfer attempted', { accountId: fromAccountId, ip: req.ip, requestId: req.requestId });
+    return res.status(400).json({ error: 'Cannot transfer to the same account' });
+  }
   
-  const fromAccount = accounts.find(a => a.id === fromAccountId);
-  const toAccount = accounts.find(a => a.id === toAccountId);
+  const fromAccount = findAccountById(fromAccountId);
+  const toAccount = findAccountById(toAccountId);
   
   if (!fromAccount || !toAccount) {
+    logger.warn('Transfer account not found', {
+      fromAccountId, toAccountId,
+      fromExists: !!fromAccount, toExists: !!toAccount,
+      ip: req.ip, requestId: req.requestId
+    });
     return res.status(404).json({ error: 'Account not found' });
   }
   
   if (fromAccount.balance < amount) {
-    logger.warn('Insufficient funds', { fromAccountId, amount, balance: fromAccount.balance });
+    logger.warn('Insufficient funds', { fromAccountId, amount, balance: fromAccount.balance, requestId: req.requestId });
     return res.status(400).json({ error: 'Insufficient funds' });
   }
-  
+
+  const previousFromBalance = fromAccount.balance;
+  const previousToBalance = toAccount.balance;
   fromAccount.balance -= amount;
   toAccount.balance += amount;
+
+  if (fromAccount.balance !== previousFromBalance - amount || toAccount.balance !== previousToBalance + amount) {
+    fromAccount.balance = previousFromBalance;
+    toAccount.balance = previousToBalance;
+    logger.error('Transfer consistency check failed, rolled back', {
+      fromAccountId, toAccountId, amount, requestId: req.requestId
+    });
+    return res.status(500).json({ error: 'Transfer failed due to internal error' });
+  }
   
-  logger.info('Transfer completed', { fromAccountId, toAccountId, amount, newBalance: fromAccount.balance });
+  logger.info('Transfer completed', {
+    fromAccountId, toAccountId, amount,
+    fromBalance: fromAccount.balance, toBalance: toAccount.balance,
+    requestId: req.requestId
+  });
   
   res.json({ message: 'Transfer successful', fromBalance: fromAccount.balance, toBalance: toAccount.balance });
 });
 
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled promise rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
 });
 
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error', { error: err.message, stack: err.stack });
-  res.status(500).json({ error: 'Internal server error' });
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — shutting down', { error: err.message, stack: err.stack });
+  process.exit(1);
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     logger.info(`Banking app running on port ${PORT}`, { environment: NODE_ENV });
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is already in use`, { port: PORT });
+    } else {
+      logger.error('Server failed to start', { error: err.message, stack: err.stack });
+    }
+    process.exit(1);
   });
 }
 

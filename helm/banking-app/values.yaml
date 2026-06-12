@@ -12,7 +12,7 @@ serviceAccount:
   create: true
   name: trading-simulator-sa
   annotations: {}
-  automountServiceAccountToken: true
+  automountServiceAccountToken: false
 
 podAnnotations:
   prometheus.io/scrape: "true"
@@ -79,6 +79,10 @@ tolerations:
     operator: Equal
     value: fargate
     effect: NoSchedule
+
+tracing:
+  enabled: true
+  collectorEndpoint: "http://jaeger-collector.tracing.svc.cluster.local:4318"
 
 ingress:
   enabled: false

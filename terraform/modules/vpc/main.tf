@@ -1,11 +1,11 @@
 locals {
   name = var.name
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Owner       = "Gerard Segismundo"
-  }
+}
+
+module "tags" {
+  source      = "../tags"
+  environment = var.environment
+  owner       = var.owner
 }
 
 module "vpc" {
@@ -37,7 +37,7 @@ module "vpc" {
     "kubernetes.io/cluster/${local.name}-eks" = "shared"
   }
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
@@ -45,5 +45,5 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   retention_in_days = 365
   kms_key_id        = var.kms_key_arn
 
-  tags = local.common_tags
+  tags = module.tags.tags
 }

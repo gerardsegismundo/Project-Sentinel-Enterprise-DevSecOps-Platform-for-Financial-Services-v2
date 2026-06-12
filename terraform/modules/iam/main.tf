@@ -1,12 +1,12 @@
 locals {
   name = var.name
-  common_tags = {
-    Project     = "Project Sentinel"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Component   = "IAM"
-    Owner       = var.owner
-  }
+}
+
+module "tags" {
+  source      = "../tags"
+  environment = var.environment
+  owner       = var.owner
+  component   = "IAM"
 }
 
 data "aws_iam_openid_connect_provider" "github" {
@@ -37,7 +37,7 @@ resource "aws_iam_role" "github_actions" {
       }
     ]
   })
-  tags = local.common_tags
+  tags = module.tags.tags
 }
 
 resource "aws_iam_role_policy_attachment" "github_actions_ecr" {

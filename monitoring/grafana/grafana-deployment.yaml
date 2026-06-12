@@ -207,17 +207,20 @@ metadata:
 spec:
   selector:
     app: grafana
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 3000
     targetPort: 3000
     name: http
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: grafana-admin
-  namespace: monitoring
-type: Opaque
-stringData:
-  password: "ChangeMe123!ProjectSentinel"
+# NOTE: The grafana-admin Secret must be provisioned out-of-band
+# (e.g. via AWS Secrets Manager, sealed-secrets, or external-secrets)
+# and NOT committed to version control.
+# Expected secret:
+#   apiVersion: v1
+#   kind: Secret
+#   metadata:
+#     name: grafana-admin
+#     namespace: monitoring
+#   type: Opaque
+#   data:
+#     password: <base64-encoded-value>
