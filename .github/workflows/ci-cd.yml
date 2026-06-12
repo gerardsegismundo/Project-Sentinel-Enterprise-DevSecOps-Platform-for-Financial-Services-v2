@@ -393,6 +393,7 @@ jobs:
           target: ${{ steps.service.outputs.endpoint }}
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          allow_issue_writing: false
       - name: DAST scan (local)
         if: ${{ env.HAS_AWS_CREDS != 'true' }}
         env:
@@ -417,6 +418,7 @@ jobs:
         with:
           target: 'http://localhost:3000'
           cmd_options: '-a'
+          allow_issue_writing: false
       - uses: actions/upload-artifact@v4
         if: always()
         with:
