@@ -21,9 +21,6 @@ jobs:
   lint-and-test:
     name: Lint & Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,9 +28,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: ./app/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test -- --coverage
+      - name: Install and lint server
+        working-directory: ./app
+        run: |
+          npm ci
+          npm run lint
+      - name: Test server
+        working-directory: ./app
+        run: npm test -- --coverage
+      - name: Install and build client
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report

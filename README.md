@@ -6,7 +6,7 @@
 
 Project Sentinel is a cloud-native DevSecOps platform designed for financial services applications. It demonstrates secure software delivery by integrating Infrastructure as Code (IaC), Kubernetes, CI/CD automation, security scanning, compliance controls, and GitOps deployment strategies on AWS.
 
-The core workload is an **Express.js banking application** with hardened security controls (helmet, CORS, rate limiting, structured logging via Winston).
+The core workload is a **full-stack banking application** with a React frontend and Express.js API backend, featuring token-based authentication, hardened security controls (helmet, CORS, rate limiting, structured logging via Winston), and production-ready DevSecOps practices.
 
 ---
 
@@ -113,17 +113,25 @@ The core workload is an **Express.js banking application** with hardened securit
 ## Repository Structure
 
 ```text
-├── app/                       # Express.js banking application
+├── app/                       # Express.js API server
 │   ├── src/
-│   │   ├── index.js           # Main application server
+│   │   ├── index.js           # Main application server (serves React build in production)
+│   │   ├── auth.js            # Token-based authentication middleware
 │   │   ├── tracing.js         # OpenTelemetry SDK initialization
 │   │   ├── middleware.js      # Express middleware (helmet, CORS, rate limiting)
 │   │   ├── logger.js          # Winston structured logging
 │   │   ├── accounts.js        # Account data and helpers
 │   │   └── errors.js          # Error handling middleware
-│   ├── tests/                 # Jest unit and integration tests
+│   ├── tests/                 # Jest unit and integration tests (30 tests)
 │   ├── package.json           # Dependencies (express, helmet, Winston, OpenTelemetry)
-│   └── Dockerfile             # Multi-stage container image
+│   └── Dockerfile             # Multi-stage container image (API only)
+├── client/                    # React frontend (banking dashboard)
+│   ├── src/
+│   │   ├── App.js             # Main app with login, dashboard, transfer, health views
+│   │   ├── api.js             # API client with token management
+│   │   └── index.css          # Responsive banking UI styles
+│   └── package.json           # React 19, react-scripts (proxy → Express :3000)
+├── Dockerfile                 # Full-stack production build (client + server)
 ├── terraform/                 # Infrastructure as Code
 │   ├── environments/dev/      # Dev environment configuration
 │   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, kms, tags)
@@ -271,14 +279,38 @@ terraform plan
 terraform apply
 ```
 
-### Application
+### API Server
 
 ```bash
 cd app
 npm install
 npm run lint
 npm test
-npm start
+npm start          # runs on http://localhost:3000
+```
+
+### React Frontend
+
+```bash
+cd client
+npm install
+npm start          # runs on http://localhost:3001, proxies API to :3000
+npm run build      # production build (served by Express in production)
+```
+
+### Authentication
+
+The API uses token-based authentication. In development (no `TOKEN_SECRET` or `API_KEY` env vars set), auth is bypassed. In production, set `TOKEN_SECRET` to enable it.
+
+```bash
+# Login (demo accounts: admin, teller, viewer — any password)
+curl -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "any"}'
+
+# Use the returned token
+curl http://localhost:3000/api/accounts \
+  -H 'Authorization: Bearer <token>'
 ```
 
 ### Deploy to Kubernetes

@@ -1,17 +1,36 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const logger = require('./logger');
 const { applyMiddleware } = require('./middleware');
 const { accounts, findAccountById, sanitizeAccount } = require('./accounts');
 const { notFoundHandler, globalErrorHandler } = require('./errors');
+const { authMiddleware, generateToken, findUserByUsername } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 applyMiddleware(app);
+app.use(authMiddleware);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: process.env.npm_package_version });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  const user = findUserByUsername(username);
+  if (!user) {
+    logger.warn('Login failed — unknown user', { username, ip: req.ip });
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  const token = generateToken(user);
+  logger.info('User logged in', { username: user.username, role: user.role, ip: req.ip });
+  res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
 });
 
 app.get('/api/accounts', (req, res) => {
@@ -85,6 +104,21 @@ app.post('/api/transfer', (req, res) => {
   
   res.json({ message: 'Transfer successful', fromBalance: fromAccount.balance, toBalance: toAccount.balance });
 });
+
+// Serve React client build when available
+const clientBuildPath = path.join(__dirname, '..', '..', 'client', 'build');
+const clientIndexPath = path.join(clientBuildPath, 'index.html');
+if (fs.existsSync(clientIndexPath)) {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path === '/health') {
+      return next();
+    }
+    res.sendFile(clientIndexPath, (err) => {
+      if (err) next();
+    });
+  });
+}
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
