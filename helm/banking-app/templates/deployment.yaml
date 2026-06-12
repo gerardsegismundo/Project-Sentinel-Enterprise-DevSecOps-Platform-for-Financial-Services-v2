@@ -53,6 +53,14 @@ spec:
               value: "banking-app"
             - name: NODE_OPTIONS
               value: "--require ./src/tracing.js"
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: banking-app-secrets
+                  key: token-secret
+                  optional: true
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
