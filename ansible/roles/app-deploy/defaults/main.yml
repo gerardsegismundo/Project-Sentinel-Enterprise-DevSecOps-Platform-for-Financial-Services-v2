@@ -1,0 +1,20 @@
+---
+app_image_tag: latest
+helm_timeout: 300s
+helm_atomic: true
+helm_wait: true
+
+helm_values:
+  replicaCount: "{{ app_replicas | default(1) }}"
+  image:
+    repository: "{{ app_image_repo }}"
+    tag: "{{ app_image_tag }}"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "{{ app_cpu_request }}"
+      memory: "{{ app_memory_request }}"
+    limits:
+      cpu: "{{ app_cpu_limit }}"
+      memory: "{{ app_memory_limit }}"
+  environment: "{{ environment }}"

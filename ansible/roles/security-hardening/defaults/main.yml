@@ -1,0 +1,17 @@
+---
+security_manifests:
+  - "{{ playbook_dir }}/../../security/rbac/rbac-policies.yaml"
+  - "{{ playbook_dir }}/../../security/network-policies/network-policies.yaml"
+  - "{{ playbook_dir }}/../../security/pod-security-standards.yaml"
+  - "{{ playbook_dir }}/../../security/kyverno/pod-security-policy.yaml"
+
+cis_benchmark_checks:
+  - name: "5.1.1 — Ensure Network Policies are in place"
+    command: "kubectl get networkpolicies -n banking"
+    expect: "trading-simulator-network-policy"
+  - name: "5.1.3 — Ensure RBAC is enabled"
+    command: "kubectl get roles,rolebindings -n banking"
+    expect: "trading-simulator-role"
+  - name: "5.2.1 — Ensure Pod Security Standards are applied"
+    command: "kubectl get ns banking -o jsonpath='{.metadata.labels.pod-security\\.kubernetes\\.io/enforce}'"
+    expect: "restricted"

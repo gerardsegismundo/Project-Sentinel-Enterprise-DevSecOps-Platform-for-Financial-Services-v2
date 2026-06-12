@@ -169,7 +169,17 @@ spec:
         - name: grafana-dashboards-provider
           mountPath: /etc/grafana/provisioning/dashboards
         - name: grafana-dashboard-trading-simulator
-          mountPath: /var/lib/grafana/dashboards
+          mountPath: /var/lib/grafana/dashboards/trading-simulator.json
+          subPath: trading-simulator.json
+        - name: grafana-dashboard-golden-signals
+          mountPath: /var/lib/grafana/dashboards/golden-signals.json
+          subPath: golden-signals.json
+        - name: grafana-dashboard-security
+          mountPath: /var/lib/grafana/dashboards/security-overview.json
+          subPath: security-overview.json
+        - name: grafana-dashboard-executive
+          mountPath: /var/lib/grafana/dashboards/executive-overview.json
+          subPath: executive-overview.json
         - name: grafana-storage
           mountPath: /var/lib/grafana
         livenessProbe:
@@ -194,6 +204,15 @@ spec:
       - name: grafana-dashboard-trading-simulator
         configMap:
           name: grafana-dashboard-trading-simulator
+      - name: grafana-dashboard-golden-signals
+        configMap:
+          name: grafana-dashboard-golden-signals
+      - name: grafana-dashboard-security
+        configMap:
+          name: grafana-dashboard-security-overview
+      - name: grafana-dashboard-executive
+        configMap:
+          name: grafana-dashboard-executive-overview
       - name: grafana-storage
         emptyDir: {}
 ---

@@ -1,0 +1,84 @@
+---
+- name: Create Kubernetes namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item.name }}"
+        labels: "{{ item.labels | default({}) }}"
+  loop: "{{ eks_namespaces }}"
+  tags: [namespaces]
+
+- name: Apply resource quotas to banking namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: banking-quota
+        namespace: banking
+      spec:
+        hard:
+          requests.cpu: "2"
+          requests.memory: 2Gi
+          limits.cpu: "4"
+          limits.memory: 4Gi
+          pods: "20"
+          services: "10"
+  tags: [quotas]
+
+- name: Apply LimitRange to banking namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: LimitRange
+      metadata:
+        name: banking-limits
+        namespace: banking
+      spec:
+        limits:
+          - type: Container
+            default:
+              cpu: "250m"
+              memory: "256Mi"
+            defaultRequest:
+              cpu: "100m"
+              memory: "128Mi"
+            max:
+              cpu: "1"
+              memory: "1Gi"
+            min:
+              cpu: "50m"
+              memory: "64Mi"
+  tags: [limits]
+
+- name: Verify EKS addons are running
+  ansible.builtin.command:
+    cmd: "aws eks describe-addon --cluster-name {{ eks_cluster_name }} --addon-name {{ item.name }} --region {{ aws_region }} --query 'addon.status' --output text"
+  register: addon_status
+  loop: "{{ eks_addons }}"
+  changed_when: false
+  failed_when: addon_status.stdout != "ACTIVE"
+  tags: [addons]
+
+- name: Verify node readiness
+  kubernetes.core.k8s_info:
+    kind: Node
+  register: nodes
+  failed_when: nodes.resources | length == 0
+  tags: [health]
+
+- name: Display node status
+  ansible.builtin.debug:
+    msg: >
+      Node {{ item.metadata.name }}:
+      Status={{ item.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') | first }},
+      Version={{ item.status.nodeInfo.kubeletVersion }}
+  loop: "{{ nodes.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  tags: [health]

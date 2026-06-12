@@ -1,0 +1,71 @@
+---
+- name: Create monitoring namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+  loop:
+    - "{{ monitoring_namespace }}"
+    - "{{ tracing_namespace }}"
+    - "{{ logging_namespace }}"
+  tags: [namespaces]
+
+- name: Deploy monitoring stack manifests
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ item }}"
+  loop: "{{ monitoring_manifests }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  tags: [deploy]
+
+- name: Wait for Prometheus to be ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: prometheus
+    namespace: "{{ monitoring_namespace }}"
+  register: prometheus
+  until:
+    - prometheus.resources | length > 0
+    - prometheus.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+  tags: [verify]
+
+- name: Wait for Grafana to be ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: grafana
+    namespace: "{{ monitoring_namespace }}"
+  register: grafana
+  until:
+    - grafana.resources | length > 0
+    - grafana.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+  tags: [verify]
+
+- name: Wait for Jaeger to be ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: jaeger
+    namespace: "{{ tracing_namespace }}"
+  register: jaeger
+  until:
+    - jaeger.resources | length > 0
+    - jaeger.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+  tags: [verify]
+
+- name: Display monitoring stack status
+  ansible.builtin.debug:
+    msg: |
+      Monitoring Stack Status:
+        Prometheus: {{ prometheus.resources[0].status.readyReplicas | default(0) }} ready
+        Grafana: {{ grafana.resources[0].status.readyReplicas | default(0) }} ready
+        Jaeger: {{ jaeger.resources[0].status.readyReplicas | default(0) }} ready
+  tags: [verify]

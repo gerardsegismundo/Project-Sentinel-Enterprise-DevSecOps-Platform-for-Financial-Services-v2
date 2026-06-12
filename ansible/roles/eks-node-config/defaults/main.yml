@@ -1,0 +1,30 @@
+---
+eks_namespaces:
+  - name: banking
+    labels:
+      pod-security.kubernetes.io/enforce: restricted
+      pod-security.kubernetes.io/audit: restricted
+      pod-security.kubernetes.io/warn: restricted
+  - name: monitoring
+    labels:
+      pod-security.kubernetes.io/enforce: baseline
+  - name: tracing
+    labels:
+      pod-security.kubernetes.io/enforce: baseline
+  - name: logging
+    labels:
+      pod-security.kubernetes.io/enforce: baseline
+  - name: argocd
+    labels: {}
+  - name: external-secrets
+    labels: {}
+
+eks_addons:
+  - name: vpc-cni
+  - name: kube-proxy
+  - name: coredns
+
+node_taints: []
+node_labels:
+  environment: "{{ environment }}"
+  project: project-sentinel
