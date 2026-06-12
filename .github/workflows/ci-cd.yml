@@ -55,10 +55,10 @@ jobs:
   sast:
     name: SAST Scan
     runs-on: ubuntu-latest
-    if: ${{ secrets.SONAR_TOKEN && secrets.SONAR_HOST_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: SonarSource/sonarqube-scan-action@v2
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
