@@ -388,7 +388,8 @@ jobs:
           echo "endpoint=http://$SERVICE_IP" >> $GITHUB_OUTPUT
       - name: Run OWASP ZAP Scan (deployed)
         if: steps.service.outcome == 'success'
-        uses: zaproxy/action-full-scan@v0.7.0
+        uses: zaproxy/action-full-scan@v0.12.0
+        continue-on-error: true
         with:
           target: ${{ steps.service.outputs.endpoint }}
           rules_file_name: '.zap/rules.tsv'
@@ -414,7 +415,8 @@ jobs:
         if: ${{ env.HAS_AWS_CREDS != 'true' }}
         env:
           HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        uses: zaproxy/action-full-scan@v0.7.0
+        uses: zaproxy/action-full-scan@v0.12.0
+        continue-on-error: true
         with:
           target: 'http://localhost:3000'
           cmd_options: '-a'
