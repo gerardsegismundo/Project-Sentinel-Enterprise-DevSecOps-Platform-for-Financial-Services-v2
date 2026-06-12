@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: project-sentinel
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "Project Sentinel — Banking Application Platform"
+
+  # Restrict source repos
+  sourceRepos:
+    - "https://github.com/gerardsegismundo/Project-Sentinel-Enterprise-DevSecOps-Platform-for-Financial-Services.git"
+
+  # Allowed destination clusters and namespaces
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: banking
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: tracing
+    - server: https://kubernetes.default.svc
+      namespace: logging
+
+  # Allowed cluster-scoped resources (none — namespace-scoped only)
+  clusterResourceWhitelist: []
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: apps
+      kind: DaemonSet
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: batch
+      kind: Job
+    - group: batch
+      kind: CronJob
+
+  # Roles for ArgoCD RBAC
+  roles:
+    - name: developer
+      description: "Read-only access to project applications"
+      policies:
+        - p, proj:project-sentinel:developer, applications, get, project-sentinel/*, allow
+        - p, proj:project-sentinel:developer, applications, sync, project-sentinel/*, deny
+      groups:
+        - developers
+
+    - name: deployer
+      description: "Can sync and manage applications"
+      policies:
+        - p, proj:project-sentinel:deployer, applications, get, project-sentinel/*, allow
+        - p, proj:project-sentinel:deployer, applications, sync, project-sentinel/*, allow
+        - p, proj:project-sentinel:deployer, applications, action/*, project-sentinel/*, allow
+      groups:
+        - deployers
+
+    - name: admin
+      description: "Full access to project"
+      policies:
+        - p, proj:project-sentinel:admin, applications, *, project-sentinel/*, allow
+      groups:
+        - platform-team

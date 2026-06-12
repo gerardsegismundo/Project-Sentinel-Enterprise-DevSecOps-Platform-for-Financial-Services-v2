@@ -126,34 +126,55 @@ The core workload is an **Express.js banking application** with hardened securit
 │   └── Dockerfile             # Multi-stage container image
 ├── terraform/                 # Infrastructure as Code
 │   ├── environments/dev/      # Dev environment configuration
-│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, tags)
+│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, kms, tags)
+├── ansible/                   # Configuration management
+│   ├── playbooks/             # Ansible playbooks (site, eks, app, secrets, monitoring, hardening)
+│   ├── roles/                 # Roles: eks-node-config, app-deploy, secrets-manager, monitoring-setup, security-hardening
+│   ├── inventory/             # Environment inventories (dev, production)
+│   └── group_vars/            # Variables per environment
 ├── helm/
 │   └── banking-app/           # Helm chart (release name: trading-simulator)
 │       ├── templates/         # Kubernetes manifests
-│       ├── values.yaml        # Production defaults
+│       ├── values.yaml        # Base defaults
 │       ├── values-dev.yaml    # Development overrides
-│       └── values-staging.yaml
+│       ├── values-staging.yaml
+│       └── values-production.yaml  # Production (HA, TLS, autoscaling)
 ├── gitops/
+│   ├── appproject.yaml        # ArgoCD AppProject (RBAC-scoped)
 │   └── projects/              # ArgoCD Application manifests
 │       ├── trading-simulator-dev/
-│       └── trading-simulator-staging/
+│       ├── trading-simulator-staging/
+│       └── trading-simulator-prod/
 ├── security/                  # Kubernetes security controls
 │   ├── rbac/                  # Role-based access control policies
 │   ├── network-policies/      # Network segmentation policies
-│   └── kyverno/               # Policy-as-code (prepared, not applied)
+│   ├── kyverno/               # Policy-as-code (prepared, not applied)
+│   ├── falco/                 # Runtime security (DaemonSet + banking-specific rules)
+│   └── secrets/               # External Secrets Operator manifests
 ├── monitoring/                # Observability stack
 │   ├── prometheus/            # Prometheus config, rules, and deployment
 │   ├── grafana/               # Grafana dashboards and datasources
 │   ├── alertmanager/          # Alert routing and receivers
 │   ├── jaeger/                # Distributed tracing (Jaeger all-in-one)
-│   └── logging/               # Centralized logging
-│       ├── fluentbit-deployment.yaml          # Log collector (DaemonSet)
-│       ├── opensearch-deployment.yaml         # Log storage (StatefulSet)
-│       └── opensearch-dashboards-deployment.yaml  # Log visualization
-├── runbooks/                  # Incident response runbooks
+│   ├── logging/               # Centralized logging (Fluent Bit → OpenSearch)
+│   └── dashboards/            # Grafana dashboard JSONs
+│       ├── golden-signals.json       # SRE golden signals
+│       ├── security-overview.json    # Security posture
+│       └── executive-overview.json   # Executive KPIs
+├── runbooks/                  # Operational runbooks
+│   ├── incident-response.md   # P1–P4 incident handling
+│   ├── deployment.md          # Deploy & rollback procedures
+│   ├── scaling.md             # Horizontal/vertical scaling
+│   ├── troubleshooting.md     # Common issues & diagnostics
+│   ├── disaster-recovery.md   # DR procedures (5 scenarios)
+│   └── security-incident.md   # Security incident response
 ├── docs/                      # Documentation
+│   ├── compliance/            # CIS, PCI-DSS, NIST, SOC2 control mappings
+│   ├── operations.md          # Operational guide
+│   ├── cost-optimization.md   # AWS cost analysis & recommendations
+│   └── architecture-decisions.md  # ADRs
 └── .github/workflows/
-    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline
+    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline (17 jobs)
 ```
 
 ---
@@ -200,6 +221,8 @@ The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main` and `d
 | Network Policies           | ✅ Deployed | `security/network-policies/network-policies.yaml` |
 | Pod Security Standards     | ✅ Deployed | `security/pod-security-standards.yaml`      |
 | Kyverno Policies           | 📋 Prepared | `security/kyverno/pod-security-policy.yaml` |
+| Falco Runtime Security     | ✅ Configured | `security/falco/falco-deployment.yaml`    |
+| External Secrets (ESO)     | ✅ Configured | `security/secrets/external-secrets.yaml`  |
 | Container Image Scanning   | ✅ Active   | CI/CD (Grype, Trivy)                        |
 | Secret Detection           | ✅ Active   | CI/CD (TruffleHog, GitLeaks)               |
 | IaC Security               | ✅ Active   | CI/CD (Checkov, tfsec)                     |
@@ -225,6 +248,7 @@ The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main` and `d
 | --------------- | ------------------------ | --------- |
 | Development      | `trading-simulator-dev`  | `banking` |
 | Staging          | `trading-simulator-staging` | `banking` |
+| Production       | `trading-simulator-prod` | `banking` |
 
 ---
 
@@ -282,11 +306,14 @@ The pipeline uses progressive OIDC bootstrapping (see `notes.txt`):
 
 ## Compliance
 
-| Framework | Controls Addressed                     |
-| --------- | -------------------------------------- |
-| CIS       | Network Policies, RBAC, Pod Security Standards |
-| PCI-DSS   | Access Control, Network Segmentation    |
-| NIST CSF  | Access Control (AC), Network Security (SC) |
+Detailed control mappings are in `docs/compliance/`.
+
+| Framework | Controls Addressed | Document |
+| --------- | -------------------------------------- | -------- |
+| CIS Kubernetes v1.8 | 24 controls: RBAC, Pod Security, NetworkPolicies, etcd, admission | `docs/compliance/cis-kubernetes-benchmark.md` |
+| PCI-DSS v4.0 | 12 requirements: network security, access control, monitoring, testing | `docs/compliance/pci-dss-controls.md` |
+| NIST SP 800-53 | 41 controls across 8 families: AC, AU, CM, IA, IR, RA, SC, SI | `docs/compliance/nist-800-53-mapping.md` |
+| SOC 2 Type II | 5 Trust Service Criteria: Security, Availability, Processing Integrity, Confidentiality, Privacy | `docs/compliance/soc2-controls.md` |
 
 ---
 

@@ -1,0 +1,12 @@
+---
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+  children:
+    eks_clusters:
+      hosts:
+        project-sentinel-prod:
+          eks_cluster_name: project-sentinel-prod
+          environment: production
+          aws_region: us-east-1

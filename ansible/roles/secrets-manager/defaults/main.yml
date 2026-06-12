@@ -1,0 +1,26 @@
+---
+secrets_manager_secrets:
+  - name: "{{ secrets_manager_prefix }}/{{ environment }}/database"
+    description: "Database credentials for {{ environment }}"
+    keys:
+      - DB_HOST
+      - DB_PORT
+      - DB_NAME
+      - DB_USER
+      - DB_PASSWORD
+
+  - name: "{{ secrets_manager_prefix }}/{{ environment }}/app"
+    description: "Application secrets for {{ environment }}"
+    keys:
+      - JWT_SECRET
+      - SESSION_SECRET
+      - ENCRYPTION_KEY
+
+  - name: "{{ secrets_manager_prefix }}/{{ environment }}/grafana"
+    description: "Grafana admin credentials"
+    keys:
+      - GRAFANA_ADMIN_USER
+      - GRAFANA_ADMIN_PASSWORD
+
+external_secrets_operator_version: "0.9.11"
+external_secrets_poll_interval: "1h"

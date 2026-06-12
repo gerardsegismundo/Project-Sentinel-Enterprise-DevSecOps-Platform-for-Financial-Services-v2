@@ -1,0 +1,222 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: falco
+  labels:
+    name: falco
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules
+  namespace: falco
+data:
+  banking-rules.yaml: |
+    - rule: Unauthorized Process in Banking Container
+      desc: Detect unexpected processes running in banking namespace containers
+      condition: >
+        spawned_process and container
+        and k8s.ns.name = "banking"
+        and not proc.name in (node, npm, sh, bash, wget)
+      output: >
+        Unexpected process in banking container
+        (user=%user.name command=%proc.cmdline container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name image=%container.image.repository)
+      priority: WARNING
+      tags: [banking, process, pci-dss]
+
+    - rule: Sensitive File Access in Banking
+      desc: Detect access to sensitive paths in banking containers
+      condition: >
+        open_read and container
+        and k8s.ns.name = "banking"
+        and (fd.name startswith /etc/shadow
+          or fd.name startswith /etc/passwd
+          or fd.name startswith /proc/self/environ)
+      output: >
+        Sensitive file accessed in banking container
+        (user=%user.name file=%fd.name container=%container.name
+        pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [banking, filesystem, pci-dss]
+
+    - rule: Shell Spawned in Banking Container
+      desc: Interactive shell opened in banking container
+      condition: >
+        spawned_process and container
+        and k8s.ns.name = "banking"
+        and proc.name in (bash, sh, ash, dash, csh, ksh, zsh)
+        and proc.pname != node
+      output: >
+        Shell spawned in banking container
+        (user=%user.name shell=%proc.name parent=%proc.pname container=%container.name
+        pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [banking, shell, mitre_execution]
+
+    - rule: Outbound Connection to Non-Standard Port
+      desc: Detect outbound connections to non-standard ports from banking containers
+      condition: >
+        outbound and container
+        and k8s.ns.name = "banking"
+        and not fd.sport in (53, 80, 443, 4318, 9090, 9200, 14268, 16686)
+      output: >
+        Outbound connection to non-standard port from banking container
+        (connection=%fd.name port=%fd.sport container=%container.name
+        pod=%k8s.pod.name)
+      priority: NOTICE
+      tags: [banking, network, pci-dss]
+
+    - rule: Write to Application Directory
+      desc: Detect writes to the application directory (read-only FS expected)
+      condition: >
+        open_write and container
+        and k8s.ns.name = "banking"
+        and fd.name startswith /app
+        and not fd.name startswith /tmp
+      output: >
+        Write attempt to application directory
+        (user=%user.name file=%fd.name container=%container.name
+        pod=%k8s.pod.name)
+      priority: ERROR
+      tags: [banking, filesystem, integrity]
+
+    - rule: Privilege Escalation Attempt
+      desc: Detect privilege escalation attempts in banking namespace
+      condition: >
+        spawned_process and container
+        and k8s.ns.name = "banking"
+        and (proc.name in (sudo, su, setuid)
+          or proc.cmdline contains "chmod +s"
+          or proc.cmdline contains "chown root")
+      output: >
+        Privilege escalation attempt in banking container
+        (user=%user.name command=%proc.cmdline container=%container.name
+        pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [banking, privilege_escalation, mitre_privilege_escalation]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falcosidekick-config
+  namespace: falco
+data:
+  config.yaml: |
+    alertmanager:
+      hostport: "http://alertmanager.monitoring.svc.cluster.local:9093"
+      minimumpriority: "warning"
+    webhook:
+      minimumpriority: "critical"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: falco
+  labels:
+    app: falco
+spec:
+  selector:
+    matchLabels:
+      app: falco
+  template:
+    metadata:
+      labels:
+        app: falco
+    spec:
+      serviceAccountName: falco
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: falco
+          image: falcosecurity/falco-no-driver:0.37.1
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true # nosemgrep: yaml.kubernetes.security.allow-privilege-escalation-true.allow-privilege-escalation-true
+          args:
+            - /usr/bin/falco
+            - --cri
+            - /run/containerd/containerd.sock
+            - -K
+            - /var/run/secrets/kubernetes.io/serviceaccount/token
+            - -k
+            - https://kubernetes.default
+            - --k8s-node
+            - "$(FALCO_K8S_NODE_NAME)"
+          env:
+            - name: FALCO_K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: containerd-socket
+              mountPath: /run/containerd/containerd.sock
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: boot
+              mountPath: /host/boot
+              readOnly: true
+            - name: lib-modules
+              mountPath: /host/lib/modules
+              readOnly: true
+            - name: custom-rules
+              mountPath: /etc/falco/rules.d
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: containerd-socket
+          hostPath:
+            path: /run/containerd/containerd.sock
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: boot
+          hostPath:
+            path: /boot
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: custom-rules
+          configMap:
+            name: falco-rules
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: falco
+  namespace: falco
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: falco
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "pods", "replicationcontrollers", "services", "events", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: falco
+subjects:
+  - kind: ServiceAccount
+    name: falco
+    namespace: falco
+roleRef:
+  kind: ClusterRole
+  name: falco
+  apiGroup: rbac.authorization.k8s.io

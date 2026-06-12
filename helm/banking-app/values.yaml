@@ -87,10 +87,20 @@ tracing:
 ingress:
   enabled: false
   className: nginx
-  annotations: {}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
   hosts:
     - host: trading-simulator.local
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: trading-simulator-tls
+      hosts:
+        - trading-simulator.local

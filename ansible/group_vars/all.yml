@@ -1,0 +1,40 @@
+---
+# Global variables for all environments
+
+# AWS
+aws_region: us-east-1
+project_name: project-sentinel
+
+# EKS
+eks_cluster_version: "1.28"
+
+# Application
+app_name: trading-simulator
+app_namespace: banking
+app_port: 3000
+app_image_repo: "{{ ecr_registry }}/trading-simulator"
+
+# ECR
+ecr_registry: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com"
+
+# Helm
+helm_chart_path: "{{ playbook_dir }}/../../helm/banking-app"
+helm_release_name: trading-simulator
+
+# Monitoring
+monitoring_namespace: monitoring
+tracing_namespace: tracing
+logging_namespace: logging
+
+# Observability
+prometheus_retention: 15d
+grafana_admin_password: "{{ vault_grafana_admin_password | default('changeme') }}"
+opensearch_replicas: 1
+
+# Security
+pod_security_standard: restricted
+network_policy_enabled: true
+
+# Secrets Manager
+secrets_manager_prefix: "/project-sentinel"
+external_secrets_namespace: external-secrets
