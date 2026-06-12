@@ -47,6 +47,12 @@ spec:
               value: {{ .Values.environment | default "production" }}
             - name: PORT
               value: "3000"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.tracing.collectorEndpoint | default "http://jaeger-collector.tracing.svc.cluster.local:4318" | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: "banking-app"
+            - name: NODE_OPTIONS
+              value: "--require ./src/tracing.js"
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

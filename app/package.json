@@ -4,7 +4,8 @@
   "description": "Enterprise DevSecOps Banking Application",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node --require ./src/tracing.js src/index.js",
+    "start:no-trace": "node src/index.js",
     "dev": "node --watch src/index.js",
     "lint": "eslint src/",
     "test": "jest",
@@ -16,7 +17,12 @@
     "cors": "^2.8.5",
     "express-rate-limit": "^7.1.5",
     "winston": "^3.11.0",
-    "@opentelemetry/api": "^1.6.0"
+    "@opentelemetry/api": "^1.6.0",
+    "@opentelemetry/sdk-node": "^0.52.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.47.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.52.0",
+    "@opentelemetry/resources": "^1.25.0",
+    "@opentelemetry/semantic-conventions": "^1.25.0"
   },
   "devDependencies": {
     "eslint": "^8.55.0",

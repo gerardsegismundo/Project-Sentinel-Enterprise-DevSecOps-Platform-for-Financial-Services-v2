@@ -80,6 +80,10 @@ tolerations:
     value: fargate
     effect: NoSchedule
 
+tracing:
+  enabled: true
+  collectorEndpoint: "http://jaeger-collector.tracing.svc.cluster.local:4318"
+
 ingress:
   enabled: false
   className: nginx

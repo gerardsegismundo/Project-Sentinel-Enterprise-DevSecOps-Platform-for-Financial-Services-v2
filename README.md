@@ -10,6 +10,77 @@ The core workload is an **Express.js banking application** with hardened securit
 
 ---
 
+## Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              AWS Cloud (us-east-1)                         │
+│                                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                     VPC (10.0.0.0/16)                              │   │
+│  │                                                                     │   │
+│  │  ┌──────────────────────┐    ┌──────────────────────┐              │   │
+│  │  │  Public Subnets      │    │  Private Subnets      │              │   │
+│  │  │  ┌────────────────┐  │    │  ┌──────────────────┐ │              │   │
+│  │  │  │ NAT Gateway    │  │    │  │  Amazon EKS      │ │              │   │
+│  │  │  │ ALB / Ingress  │──│────│──│                  │ │              │   │
+│  │  │  └────────────────┘  │    │  │  ┌────────────┐ │ │              │   │
+│  │  └──────────────────────┘    │  │  │  banking   │ │ │              │   │
+│  │                              │  │  │  namespace │ │ │              │   │
+│  │                              │  │  │            │ │ │              │   │
+│  │                              │  │  │ trading-   │ │ │              │   │
+│  │                              │  │  │ simulator  │ │ │              │   │
+│  │                              │  │  │ (Express)  │ │ │              │   │
+│  │                              │  │  └──────┬─────┘ │ │              │   │
+│  │                              │  └─────────│───────┘ │              │   │
+│  │                              └────────────│─────────┘              │   │
+│  └───────────────────────────────────────────│─────────────────────────┘   │
+│                                              │                            │
+│  ┌───────────────────────────────────────────│─────────────────────────┐   │
+│  │              Observability (three pillars)│                         │   │
+│  │                                           │                         │   │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌─────▼───────┐               │   │
+│  │  │ Metrics     │  │ Logging      │  │ Tracing     │               │   │
+│  │  │             │  │              │  │             │               │   │
+│  │  │ Prometheus  │  │ Fluent Bit   │  │ OpenTelemetry               │   │
+│  │  │ Grafana     │  │ OpenSearch   │  │ Jaeger      │               │   │
+│  │  │ AlertManager│  │ Dashboards   │  │             │               │   │
+│  │  └─────────────┘  └──────────────┘  └─────────────┘               │   │
+│  └────────────────────────────────────────────────────────────────────┘   │
+│                                                                           │
+│  ┌────────────────────────────────────────────────────────────────────┐   │
+│  │                   Security Controls                                │   │
+│  │  RBAC · Network Policies · Pod Security Standards · Kyverno       │   │
+│  │  Secret Scanning · SAST · DAST · Container Scanning · IaC Scan    │   │
+│  └────────────────────────────────────────────────────────────────────┘   │
+│                                                                           │
+│  Amazon ECR ◄──── GitHub Actions CI/CD ────► ArgoCD (GitOps)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                     CI/CD Pipeline Flow
+                     ═══════════════════
+
+  Code Push ──► Lint/Test ──► Secret Scan ──► SAST ──► Dependency Scan
+       │                                                      │
+       │         IaC Scan ◄───────────────────────────────────┘
+       │              │
+       │              ▼
+       │     Container Build ──► Container Scan ──► Push to ECR
+       │                                                │
+       │                                                ▼
+       │                              Deploy Dev ──► Integration Tests
+       │                                    │              │
+       │                                    ▼              ▼
+       │                           Deploy Staging ──► DAST Scan
+       │                                                │
+       │                                                ▼
+       └─────────────────────────────────── Deploy Production ──► Validate
+                                                                    │
+                                                             Rollback (on failure)
+```
+
+---
+
 ## Technology Stack
 
 | Category                   | Technology                                                |
@@ -33,7 +104,8 @@ The core workload is an **Express.js banking application** with hardened securit
 | Alerting                   | AlertManager (`monitoring/alertmanager/`)                 |
 | Dashboards                 | Grafana (`monitoring/grafana/`)                           |
 | Security Controls          | RBAC, NetworkPolicies, Pod Security Standards (`security/`) |
-| Tracing                    | OpenTelemetry                                             |
+| Tracing                    | OpenTelemetry, Jaeger (`monitoring/jaeger/`)              |
+| Centralized Logging        | Fluent Bit, OpenSearch, OpenSearch Dashboards (`monitoring/logging/`) |
 | Governance                 | CIS, NIST, PCI-DSS                                        |
 
 ---
@@ -42,13 +114,19 @@ The core workload is an **Express.js banking application** with hardened securit
 
 ```text
 ├── app/                       # Express.js banking application
-│   ├── src/index.js           # Main application server
+│   ├── src/
+│   │   ├── index.js           # Main application server
+│   │   ├── tracing.js         # OpenTelemetry SDK initialization
+│   │   ├── middleware.js      # Express middleware (helmet, CORS, rate limiting)
+│   │   ├── logger.js          # Winston structured logging
+│   │   ├── accounts.js        # Account data and helpers
+│   │   └── errors.js          # Error handling middleware
+│   ├── tests/                 # Jest unit and integration tests
 │   ├── package.json           # Dependencies (express, helmet, Winston, OpenTelemetry)
-│   └── Dockerfile             # Container image
+│   └── Dockerfile             # Multi-stage container image
 ├── terraform/                 # Infrastructure as Code
 │   ├── environments/dev/      # Dev environment configuration
-│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam)
-├── ansible/                   # Configuration management playbooks
+│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, tags)
 ├── helm/
 │   └── banking-app/           # Helm chart (release name: trading-simulator)
 │       ├── templates/         # Kubernetes manifests
@@ -66,7 +144,12 @@ The core workload is an **Express.js banking application** with hardened securit
 ├── monitoring/                # Observability stack
 │   ├── prometheus/            # Prometheus config, rules, and deployment
 │   ├── grafana/               # Grafana dashboards and datasources
-│   └── alertmanager/          # Alert routing and receivers
+│   ├── alertmanager/          # Alert routing and receivers
+│   ├── jaeger/                # Distributed tracing (Jaeger all-in-one)
+│   └── logging/               # Centralized logging
+│       ├── fluentbit-deployment.yaml          # Log collector (DaemonSet)
+│       ├── opensearch-deployment.yaml         # Log storage (StatefulSet)
+│       └── opensearch-dashboards-deployment.yaml  # Log visualization
 ├── runbooks/                  # Incident response runbooks
 ├── docs/                      # Documentation
 └── .github/workflows/
@@ -122,14 +205,19 @@ The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main` and `d
 | IaC Security               | ✅ Active   | CI/CD (Checkov, tfsec)                     |
 | DAST                       | ✅ Active   | CI/CD (OWASP ZAP)                           |
 
-### Observability
+### Observability (Three Pillars)
 
-| Component        | Status      | Details                                      |
-| ---------------- | ----------- | -------------------------------------------- |
-| Prometheus       | ✅ Deployed | Application, Kubernetes, and node metrics    |
-| AlertManager     | ✅ Deployed | Critical and warning alert routing           |
-| Grafana          | ✅ Deployed | Trading Simulator Overview dashboard included |
-| Alert Rules      | ✅ Configured | Pod restarts, high memory/CPU, node health, PVC capacity |
+| Pillar   | Component              | Status        | Details                                              |
+| -------- | ---------------------- | ------------- | ---------------------------------------------------- |
+| Metrics  | Prometheus             | ✅ Deployed   | Application, Kubernetes, and node metrics            |
+| Metrics  | AlertManager           | ✅ Deployed   | Critical and warning alert routing                   |
+| Metrics  | Grafana                | ✅ Deployed   | Trading Simulator Overview dashboard                 |
+| Metrics  | Alert Rules            | ✅ Configured | Pod restarts, high memory/CPU, node health, PVC      |
+| Tracing  | OpenTelemetry SDK      | ✅ Instrumented | Auto-instrumentation for Express, HTTP, Winston    |
+| Tracing  | Jaeger                 | ✅ Deployed   | All-in-one collector + query UI (OTLP receiver)      |
+| Logging  | Fluent Bit             | ✅ Deployed   | DaemonSet collecting container logs from banking/monitoring/tracing namespaces |
+| Logging  | OpenSearch             | ✅ Deployed   | Centralized log storage with `logs-banking` index    |
+| Logging  | OpenSearch Dashboards  | ✅ Deployed   | Log visualization and search UI                      |
 
 ### GitOps
 
