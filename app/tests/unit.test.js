@@ -1,5 +1,5 @@
 const request = require('supertest');
-const app = require('../src/index');
+const app = require('../server/index').default || require('../server/index');
 
 describe('Health Check', () => {
   it('should return healthy status', async () => {
@@ -243,7 +243,7 @@ describe('Authentication', () => {
   });
 
   it('should reject invalid token', async () => {
-    const { authMiddleware } = require('../src/auth');
+    const { authMiddleware } = require('../server/auth');
     const testApp = require('express')();
     testApp.use(require('express').json());
 

@@ -2,12 +2,13 @@
   "name": "banking-app",
   "version": "1.0.0",
   "description": "Enterprise DevSecOps Banking Application",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node --require ./src/tracing.js src/index.js",
-    "start:no-trace": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "lint": "eslint src/",
+    "start": "node --require ./dist/tracing.js dist/index.js",
+    "start:no-trace": "node dist/index.js",
+    "dev": "ts-node --watch server/index.ts",
+    "build": "tsc",
+    "lint": "eslint server/",
     "test": "jest",
     "test:integration": "jest --testPathPattern=integration"
   },
@@ -36,6 +37,8 @@
     "jest": "^29.7.0",
     "nodemon": "^3.0.2",
     "supertest": "^6.3.3",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   },
   "jest": {
