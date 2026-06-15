@@ -3,11 +3,11 @@
 import React, { useState, useEffect } from "react";
 import {
   login as apiLogin,
+  logout as apiLogout,
   getAccounts,
   transfer as apiTransfer,
   getHealth,
   setToken,
-  clearToken,
   type User,
   type Account,
   type HealthResponse,
@@ -113,11 +113,12 @@ export default function App() {
   }
 
   function handleLogout() {
-    clearToken();
-    setUser(null);
-    setAccounts([]);
-    setTransfers([]);
-    setActiveTab("dashboard");
+    apiLogout().finally(() => {
+      setUser(null);
+      setAccounts([]);
+      setTransfers([]);
+      setActiveTab("dashboard");
+    });
   }
 
   if (!user) {
@@ -224,7 +225,6 @@ function LoginView({ onLogin }: { onLogin: (user: User) => void }) {
     setError("");
     try {
       const data = await apiLogin(username, password);
-      setToken(data.token);
       onLogin(data.user);
     } catch (err) {
       setError((err as Error).message || "Login failed");

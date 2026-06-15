@@ -6,6 +6,7 @@ import { applyMiddleware } from './middleware';
 import { accounts, findAccountById, sanitizeAccount } from './accounts';
 import { notFoundHandler, globalErrorHandler } from './errors';
 import { authMiddleware, generateToken, findUserByUsername } from './auth';
+import { cognitoAuthMiddleware } from './cognito-auth';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +14,13 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 applyMiddleware(app);
 app.use(authMiddleware);
+
+// Cognito JWT guard — applied only to protected API routes
+const useCognito = !!process.env.COGNITO_USER_POOL_ID;
+if (useCognito) {
+  app.use('/api/accounts', cognitoAuthMiddleware);
+  app.use('/api/transfer', cognitoAuthMiddleware);
+}
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: process.env.npm_package_version });

@@ -1,17 +1,31 @@
+import { Amplify } from "aws-amplify";
+import { signIn, signOut, fetchAuthSession } from "aws-amplify/auth";
+
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID!,
+      userPoolClientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID!,
+    },
+  },
+});
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-let authToken: string | null = null;
+// Kept for backward-compat; Cognito session token takes precedence
+let _overrideToken: string | null = null;
 
-export function setToken(token: string) {
-  authToken = token;
-}
+export function setToken(token: string) { _overrideToken = token; }
+export function getToken(): string | null { return _overrideToken; }
+export function clearToken() { _overrideToken = null; }
 
-export function getToken(): string | null {
-  return authToken;
-}
-
-export function clearToken() {
-  authToken = null;
+async function getCognitoAccessToken(): Promise<string | null> {
+  try {
+    const session = await fetchAuthSession();
+    return session.tokens?.accessToken?.toString() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 interface RequestOptions extends RequestInit {
@@ -24,8 +38,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...options.headers,
   };
 
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
+  const cognitoToken = await getCognitoAccessToken();
+  const token = cognitoToken ?? _overrideToken;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
@@ -73,11 +89,23 @@ export interface HealthResponse {
   version: string;
 }
 
-export function login(username: string, password: string): Promise<LoginResponse> {
-  return request<LoginResponse>("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-  });
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  await signIn({ username, password });
+  const session = await fetchAuthSession();
+  const accessToken = session.tokens?.accessToken?.toString() ?? "";
+  const idPayload = session.tokens?.idToken?.payload ?? {};
+  const groups = (idPayload["cognito:groups"] as string[] | undefined) ?? [];
+  const user: User = {
+    id: 0,
+    username: (idPayload["cognito:username"] as string) ?? username,
+    role: groups[0] ?? "viewer",
+  };
+  return { token: accessToken, user };
+}
+
+export async function logout(): Promise<void> {
+  clearToken();
+  await signOut();
 }
 
 export function getAccounts(): Promise<{ accounts: Account[] }> {
