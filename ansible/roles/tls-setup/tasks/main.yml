@@ -1,0 +1,63 @@
+---
+- name: Create cert-manager namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ cert_manager_namespace }}"
+
+- name: Add Jetstack Helm repository
+  kubernetes.core.helm_repository:
+    name: jetstack
+    repo_url: "{{ cert_manager_chart_repo }}"
+
+- name: Install cert-manager via Helm
+  kubernetes.core.helm:
+    name: cert-manager
+    chart_ref: jetstack/cert-manager
+    release_namespace: "{{ cert_manager_namespace }}"
+    chart_version: "{{ cert_manager_version }}"
+    values:
+      installCRDs: true
+      securityContext:
+        runAsNonRoot: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+- name: Wait for cert-manager to be ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: cert-manager
+    namespace: "{{ cert_manager_namespace }}"
+  register: cert_manager_deploy
+  until: cert_manager_deploy.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+
+- name: Apply cert-manager ClusterIssuers and Certificates
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../../security/tls/cert-manager.yaml"
+
+- name: Apply TLS enforcement policies
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../../security/tls/tls-policy.yaml"
+
+- name: Verify ClusterIssuer is ready
+  kubernetes.core.k8s_info:
+    api_version: cert-manager.io/v1
+    kind: ClusterIssuer
+    name: letsencrypt-production
+  register: issuer_status
+  until: issuer_status.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
+  retries: 10
+  delay: 15
+  ignore_errors: true

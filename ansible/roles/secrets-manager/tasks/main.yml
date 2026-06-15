@@ -1,0 +1,131 @@
+---
+- name: Create AWS Secrets Manager secrets
+  community.aws.secretsmanager_secret:
+    name: "{{ item.name }}"
+    description: "{{ item.description }}"
+    region: "{{ aws_region }}"
+    state: present
+  loop: "{{ secrets_manager_secrets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [create]
+
+- name: Install External Secrets Operator via Helm
+  kubernetes.core.helm:
+    name: external-secrets
+    chart_ref: external-secrets
+    chart_repo_url: https://charts.external-secrets.io
+    chart_version: "{{ external_secrets_operator_version }}"
+    release_namespace: "{{ external_secrets_namespace }}"
+    create_namespace: true
+    wait: true
+    values:
+      installCRDs: true
+  tags: [eso]
+
+- name: Wait for ESO to be ready
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: external-secrets
+    namespace: "{{ external_secrets_namespace }}"
+  register: eso_deployment
+  until:
+    - eso_deployment.resources | length > 0
+    - eso_deployment.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+  tags: [eso]
+
+- name: Create ClusterSecretStore for AWS Secrets Manager
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ClusterSecretStore
+      metadata:
+        name: aws-secrets-manager
+      spec:
+        provider:
+          aws:
+            service: SecretsManager
+            region: "{{ aws_region }}"
+            auth:
+              jwt:
+                serviceAccountRef:
+                  name: external-secrets
+                  namespace: "{{ external_secrets_namespace }}"
+  tags: [eso]
+
+- name: Create ExternalSecret for banking app
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: banking-app-secrets
+        namespace: "{{ app_namespace }}"
+      spec:
+        refreshInterval: "{{ external_secrets_poll_interval }}"
+        secretStoreRef:
+          name: aws-secrets-manager
+          kind: ClusterSecretStore
+        target:
+          name: banking-app-secrets
+          creationPolicy: Owner
+        data:
+          - secretKey: JWT_SECRET
+            remoteRef:
+              key: "{{ secrets_manager_prefix }}/{{ environment }}/app"
+              property: JWT_SECRET
+          - secretKey: SESSION_SECRET
+            remoteRef:
+              key: "{{ secrets_manager_prefix }}/{{ environment }}/app"
+              property: SESSION_SECRET
+          - secretKey: ENCRYPTION_KEY
+            remoteRef:
+              key: "{{ secrets_manager_prefix }}/{{ environment }}/app"
+              property: ENCRYPTION_KEY
+  tags: [eso]
+
+- name: Create ExternalSecret for Grafana
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: grafana-secrets
+        namespace: "{{ monitoring_namespace }}"
+      spec:
+        refreshInterval: "{{ external_secrets_poll_interval }}"
+        secretStoreRef:
+          name: aws-secrets-manager
+          kind: ClusterSecretStore
+        target:
+          name: grafana-admin-credentials
+          creationPolicy: Owner
+        data:
+          - secretKey: admin-user
+            remoteRef:
+              key: "{{ secrets_manager_prefix }}/{{ environment }}/grafana"
+              property: GRAFANA_ADMIN_USER
+          - secretKey: admin-password
+            remoteRef:
+              key: "{{ secrets_manager_prefix }}/{{ environment }}/grafana"
+              property: GRAFANA_ADMIN_PASSWORD
+  tags: [eso]
+
+- name: Verify ExternalSecret sync
+  kubernetes.core.k8s_info:
+    kind: ExternalSecret
+    namespace: "{{ app_namespace }}"
+    name: banking-app-secrets
+  register: external_secret
+  until:
+    - external_secret.resources | length > 0
+    - external_secret.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
+  retries: 12
+  delay: 10
+  ignore_errors: true
+  tags: [verify]

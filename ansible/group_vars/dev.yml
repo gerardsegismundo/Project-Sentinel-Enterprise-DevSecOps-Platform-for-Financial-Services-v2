@@ -1,0 +1,26 @@
+---
+# Dev environment variables
+
+environment: dev
+eks_cluster_name: project-sentinel-dev
+aws_account_id: "{{ vault_aws_account_id | default('123456789012') }}"
+
+# Scaling
+app_replicas: 1
+app_min_replicas: 1
+app_max_replicas: 3
+
+# Resources
+app_cpu_request: "100m"
+app_cpu_limit: "250m"
+app_memory_request: "128Mi"
+app_memory_limit: "256Mi"
+
+# Monitoring
+prometheus_retention: 7d
+opensearch_replicas: 1
+grafana_anonymous_access: true
+
+# Security — relaxed for dev
+network_policy_strict: false
+enable_falco: false

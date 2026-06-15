@@ -1,0 +1,51 @@
+---
+# Master playbook — orchestrates full environment setup
+# Usage: ansible-playbook -i inventory/dev.yml playbooks/site.yml
+
+- name: Project Sentinel — Full Environment Setup
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify AWS credentials
+      amazon.aws.aws_caller_identity_info:
+      register: aws_identity
+
+    - name: Display AWS account info
+      ansible.builtin.debug:
+        msg: "Running as {{ aws_identity.arn }} in account {{ aws_identity.account }}"
+
+    - name: Update kubeconfig for EKS cluster
+      ansible.builtin.command:
+        cmd: "aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ aws_region }}"
+      changed_when: true
+
+  roles:
+    - role: eks-node-config
+      tags: [eks, infrastructure]
+
+    - role: security-hardening
+      tags: [security, hardening]
+
+    - role: secrets-manager
+      tags: [secrets]
+
+    - role: monitoring-setup
+      tags: [monitoring, observability]
+
+    - role: tls-setup
+      tags: [tls, security, certificates]
+
+    - role: app-deploy
+      tags: [app, deploy]
+
+  post_tasks:
+    - name: Verify cluster health
+      kubernetes.core.k8s_info:
+        kind: Node
+      register: nodes
+
+    - name: Display cluster status
+      ansible.builtin.debug:
+        msg: "Cluster {{ eks_cluster_name }} has {{ nodes.resources | length }} node(s) ready"

@@ -7,6 +7,11 @@ data:
   alertmanager.yml: |
     global:
       resolve_timeout: 5m
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+      slack_api_url: 'https://hooks.slack.com/services/PLACEHOLDER'
+
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
 
     route:
       receiver: 'default'
@@ -15,59 +20,186 @@ data:
       group_interval: 10s
       repeat_interval: 12h
       routes:
-        # Critical alerts
+        # Critical alerts → PagerDuty (immediate page)
         - match:
             severity: critical
-          receiver: 'critical'
+          receiver: 'pagerduty-critical'
+          repeat_interval: 5m
+          continue: true
+
+        # Critical also go to Slack for visibility
+        - match:
+            severity: critical
+          receiver: 'slack-critical'
           repeat_interval: 5m
 
-        # Warning alerts
+        # Warning alerts → Slack only
         - match:
             severity: warning
-          receiver: 'warning'
+          receiver: 'slack-warnings'
           repeat_interval: 30m
 
-        # Application alerts
+        # Application alerts → dedicated Slack channel
         - match:
             component: application
-          receiver: 'application'
+          receiver: 'slack-application'
           repeat_interval: 1h
+
+        # Security alerts → PagerDuty + dedicated channel
+        - match:
+            category: security
+          receiver: 'pagerduty-security'
+          repeat_interval: 5m
+          continue: true
+        - match:
+            category: security
+          receiver: 'slack-security'
+          repeat_interval: 5m
+
+        # Compliance alerts → ServiceNow ticket creation
+        - match:
+            category: compliance
+          receiver: 'servicenow-compliance'
+          repeat_interval: 24h
 
     receivers:
       - name: 'default'
-        # Default receiver - can add Slack/PagerDuty webhook later
+        slack_configs:
+          - channel: '#project-sentinel-alerts'
+            send_resolved: true
+            title: '{{ template "slack.default.title" . }}'
+            text: '{{ template "slack.default.text" . }}'
+            actions:
+              - type: button
+                text: 'View in Grafana'
+                url: 'http://grafana.monitoring.svc:3000'
+              - type: button
+                text: 'Runbook'
+                url: 'https://github.com/gerardsegismundo/Project-Sentinel-Enterprise-DevSecOps-Platform-for-Financial-Services/tree/master/runbooks'
 
-      - name: 'critical'
-        # Configure PagerDuty for critical alerts
-        # pagerduty_configs:
-        #   - service_key: 'PAGERDUTY_SERVICE_KEY_HERE'
+      - name: 'pagerduty-critical'
+        pagerduty_configs:
+          - routing_key_file: '/etc/alertmanager/secrets/pagerduty-critical-key'
+            severity: 'critical'
+            description: '{{ .CommonAnnotations.summary }}'
+            details:
+              firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+              num_firing: '{{ .Alerts.Firing | len }}'
+              num_resolved: '{{ .Alerts.Resolved | len }}'
+              resolved: '{{ template "pagerduty.default.instances" .Alerts.Resolved }}'
 
-      - name: 'warning'
-        # Configure Slack for warning alerts
-        # slack_configs:
-        #   - api_url: 'SLACK_WEBHOOK_URL_HERE'
-        #     channel: '#warnings'
+      - name: 'pagerduty-security'
+        pagerduty_configs:
+          - routing_key_file: '/etc/alertmanager/secrets/pagerduty-security-key'
+            severity: 'critical'
+            description: 'SECURITY: {{ .CommonAnnotations.summary }}'
+            details:
+              firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
 
-      - name: 'application'
-        # Configure Slack for application alerts
-        # slack_configs:
-        #   - api_url: 'SLACK_WEBHOOK_URL_HERE'
-        #     channel: '#trading-simulator'
+      - name: 'slack-critical'
+        slack_configs:
+          - channel: '#project-sentinel-critical'
+            send_resolved: true
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+            title: ':rotating_light: CRITICAL: {{ .CommonLabels.alertname }}'
+            text: >-
+              *Alert:* {{ .CommonAnnotations.summary }}
+              *Cluster:* {{ .CommonLabels.cluster }}
+              *Details:* {{ .CommonAnnotations.description }}
+            actions:
+              - type: button
+                text: 'Acknowledge in PagerDuty'
+                url: 'https://project-sentinel.pagerduty.com'
+
+      - name: 'slack-warnings'
+        slack_configs:
+          - channel: '#project-sentinel-warnings'
+            send_resolved: true
+            color: 'warning'
+            title: ':warning: {{ .CommonLabels.alertname }}'
+            text: >-
+              *Alert:* {{ .CommonAnnotations.summary }}
+              *Details:* {{ .CommonAnnotations.description }}
+
+      - name: 'slack-application'
+        slack_configs:
+          - channel: '#project-sentinel-app'
+            send_resolved: true
+            title: '{{ .CommonLabels.alertname }}'
+            text: >-
+              *Alert:* {{ .CommonAnnotations.summary }}
+              *Service:* {{ .CommonLabels.service }}
+              *Details:* {{ .CommonAnnotations.description }}
+
+      - name: 'slack-security'
+        slack_configs:
+          - channel: '#project-sentinel-security'
+            send_resolved: true
+            color: 'danger'
+            title: ':lock: SECURITY: {{ .CommonLabels.alertname }}'
+            text: >-
+              *Alert:* {{ .CommonAnnotations.summary }}
+              *Severity:* {{ .CommonLabels.severity }}
+              *Details:* {{ .CommonAnnotations.description }}
+
+      - name: 'servicenow-compliance'
+        webhook_configs:
+          - url: 'http://servicenow-webhook.monitoring.svc:8080/api/now/table/incident'
+            send_resolved: true
+            http_config:
+              basic_auth:
+                username: 'alertmanager'
+                password_file: '/etc/alertmanager/secrets/servicenow-password'
 
     inhibit_rules:
-      # Inhibit warning if critical exists
+      # Inhibit warning if critical exists for same alert
       - source_match:
           severity: 'critical'
         target_match:
           severity: 'warning'
         equal: ['alertname', 'component']
 
-      # Inhibit info if warning exists
+      # Inhibit info if warning exists for same alert
       - source_match:
           severity: 'warning'
         target_match:
           severity: 'info'
         equal: ['alertname', 'component']
+
+      # Inhibit all alerts if cluster is down
+      - source_match:
+          alertname: 'ClusterDown'
+        target_match_re:
+          severity: '.*'
+        equal: ['cluster']
+
+  # Notification template overrides
+  notification.tmpl: |
+    {{ define "slack.default.title" }}
+    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+    {{ end }}
+
+    {{ define "slack.default.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    *Severity:* {{ .Labels.severity }}
+    *Started:* {{ .StartsAt | since }}
+    {{ end }}
+    {{ end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  # Replace these with actual keys from AWS Secrets Manager via External Secrets Operator
+  # See security/secrets/external-secrets.yaml for ESO configuration
+  pagerduty-critical-key: "REPLACE_WITH_PAGERDUTY_ROUTING_KEY"
+  pagerduty-security-key: "REPLACE_WITH_PAGERDUTY_SECURITY_ROUTING_KEY"
+  servicenow-password: "REPLACE_WITH_SERVICENOW_PASSWORD"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -75,7 +207,7 @@ metadata:
   name: alertmanager
   namespace: monitoring
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: alertmanager
@@ -88,17 +220,37 @@ spec:
         prometheus.io/port: "9093"
         prometheus.io/path: "/metrics"
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - alertmanager
+                topologyKey: kubernetes.io/hostname
       containers:
       - name: alertmanager
-        image: prom/alertmanager:latest
+        image: prom/alertmanager:v0.27.0
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
         args:
           - "--config.file=/etc/alertmanager/alertmanager.yml"
           - "--storage.path=/alertmanager"
+          - "--cluster.listen-address=0.0.0.0:9094"
+          - "--cluster.peer=alertmanager-0.alertmanager.monitoring.svc:9094"
         ports:
         - containerPort: 9093
           name: http
+        - containerPort: 9094
+          name: cluster
         resources:
           requests:
             cpu: 100m
@@ -109,6 +261,9 @@ spec:
         volumeMounts:
         - name: alertmanager-config
           mountPath: /etc/alertmanager
+        - name: alertmanager-secrets
+          mountPath: /etc/alertmanager/secrets
+          readOnly: true
         - name: alertmanager-storage
           mountPath: /alertmanager
         livenessProbe:
@@ -127,6 +282,9 @@ spec:
       - name: alertmanager-config
         configMap:
           name: alertmanager-config
+      - name: alertmanager-secrets
+        secret:
+          secretName: alertmanager-secrets
       - name: alertmanager-storage
         emptyDir: {}
 ---
@@ -145,3 +303,6 @@ spec:
   - port: 9093
     targetPort: 9093
     name: http
+  - port: 9094
+    targetPort: 9094
+    name: cluster

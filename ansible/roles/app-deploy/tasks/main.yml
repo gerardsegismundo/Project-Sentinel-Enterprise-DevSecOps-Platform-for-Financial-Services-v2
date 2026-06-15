@@ -1,0 +1,68 @@
+---
+- name: Log in to ECR
+  ansible.builtin.command:
+    cmd: "aws ecr get-login-password --region {{ aws_region }}"
+  register: ecr_password
+  changed_when: false
+  no_log: true
+  tags: [ecr]
+
+- name: Verify image exists in ECR
+  ansible.builtin.command:
+    cmd: >
+      aws ecr describe-images
+      --repository-name {{ app_name }}
+      --image-ids imageTag={{ app_image_tag }}
+      --region {{ aws_region }}
+      --query 'imageDetails[0].imageTags'
+      --output json
+  register: ecr_image
+  changed_when: false
+  failed_when: ecr_image.rc != 0
+  tags: [ecr]
+
+- name: Deploy banking application via Helm
+  kubernetes.core.helm:
+    name: "{{ helm_release_name }}"
+    chart_ref: "{{ helm_chart_path }}"
+    release_namespace: "{{ app_namespace }}"
+    create_namespace: true
+    wait: "{{ helm_wait }}"
+    atomic: "{{ helm_atomic }}"
+    timeout: "{{ helm_timeout }}"
+    values_files:
+      - "{{ helm_chart_path }}/values-{{ environment }}.yaml"
+    values:
+      image:
+        tag: "{{ app_image_tag }}"
+  tags: [deploy]
+
+- name: Wait for deployment rollout
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: "{{ app_name }}"
+    namespace: "{{ app_namespace }}"
+  register: deployment
+  until:
+    - deployment.resources | length > 0
+    - deployment.resources[0].status.readyReplicas | default(0) == deployment.resources[0].spec.replicas
+  retries: 30
+  delay: 10
+  tags: [verify]
+
+- name: Verify application health endpoint
+  ansible.builtin.uri:
+    url: "http://localhost:3000/health"
+    method: GET
+    return_content: true
+  register: health_check
+  delegate_to: "{{ app_name }}-pod"
+  ignore_errors: true
+  tags: [verify]
+
+- name: Display deployment status
+  ansible.builtin.debug:
+    msg: >
+      Deployment {{ app_name }}: {{ deployment.resources[0].status.readyReplicas | default(0) }}/{{ deployment.resources[0].spec.replicas }} pods ready
+      (image: {{ deployment.resources[0].spec.template.spec.containers[0].image }})
+  tags: [verify]

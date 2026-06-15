@@ -1,0 +1,73 @@
+---
+- name: Apply security manifests
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ item }}"
+  loop: "{{ security_manifests }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  tags: [apply]
+
+- name: Deploy Falco runtime security
+  kubernetes.core.helm:
+    name: falco
+    chart_ref: falco
+    chart_repo_url: https://falcosecurity.github.io/charts
+    release_namespace: falco
+    create_namespace: true
+    wait: true
+    values:
+      falcosidekick:
+        enabled: true
+        webui:
+          enabled: true
+      driver:
+        kind: ebpf
+      customRules:
+        banking-rules.yaml: |
+          - rule: Unauthorized Process in Banking Container
+            desc: Detect unexpected processes in banking namespace
+            condition: >
+              spawned_process and container
+              and k8s.ns.name = "banking"
+              and not proc.name in (node, npm, sh, bash)
+            output: >
+              Unexpected process in banking container
+              (user=%user.name command=%proc.cmdline container=%container.name
+              namespace=%k8s.ns.name pod=%k8s.pod.name)
+            priority: WARNING
+            tags: [banking, process]
+
+          - rule: Sensitive File Access in Banking
+            desc: Detect access to sensitive paths in banking containers
+            condition: >
+              open_read and container
+              and k8s.ns.name = "banking"
+              and (fd.name startswith /etc/shadow or fd.name startswith /etc/passwd)
+            output: >
+              Sensitive file accessed in banking container
+              (user=%user.name file=%fd.name container=%container.name)
+            priority: CRITICAL
+            tags: [banking, filesystem]
+  when: enable_falco | default(false)
+  tags: [falco]
+
+- name: Run CIS benchmark checks
+  ansible.builtin.command:
+    cmd: "{{ item.command }}"
+  register: cis_result
+  loop: "{{ cis_benchmark_checks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  failed_when: item.expect not in cis_result.stdout
+  tags: [cis, verify]
+
+- name: Display CIS compliance status
+  ansible.builtin.debug:
+    msg: "{{ item.item.name }}: PASS"
+  loop: "{{ cis_result.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item is not failed
+  tags: [cis, verify]

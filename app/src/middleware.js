@@ -7,9 +7,12 @@ const logger = require('./logger');
 
 function applyMiddleware(app) {
   app.use(helmet());
-  app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : false
-  }));
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : process.env.NODE_ENV !== 'production'
+      ? true
+      : false;
+  app.use(cors({ origin: allowedOrigins }));
   app.use(express.json({ limit: '100kb' }));
 
   app.use((err, req, res, next) => {

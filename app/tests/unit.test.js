@@ -44,10 +44,10 @@ describe('Accounts API', () => {
     expect(res.body.error).toBe('Account not found');
   });
 
-  it('should return 404 for non-numeric account id', async () => {
+  it('should return 400 for non-numeric account id', async () => {
     const res = await request(app).get('/api/accounts/abc');
-    expect(res.statusCode).toEqual(404);
-    expect(res.body.error).toBe('Account not found');
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toBe('Invalid account ID format');
   });
 
   it('should include all expected fields in the account list', async () => {
@@ -200,6 +200,66 @@ describe('Security Headers', () => {
       .set('Content-Type', 'application/json')
       .send(JSON.stringify({ fromAccountId: 1, toAccountId: 2, amount: 1 }));
     expect(res.statusCode).not.toEqual(415);
+  });
+});
+
+describe('Authentication', () => {
+  it('should login with valid username', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'any' });
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.token).toBeDefined();
+    expect(res.body.user.username).toBe('admin');
+    expect(res.body.user.role).toBe('admin');
+  });
+
+  it('should reject login with missing credentials', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'admin' });
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.error).toContain('required');
+  });
+
+  it('should reject login with unknown username', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'nonexistent', password: 'pass' });
+    expect(res.statusCode).toEqual(401);
+  });
+
+  it('should access protected endpoint with valid token', async () => {
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'teller', password: 'any' });
+    const token = loginRes.body.token;
+
+    const res = await request(app)
+      .get('/api/accounts')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.accounts).toBeDefined();
+  });
+
+  it('should reject invalid token', async () => {
+    const { authMiddleware } = require('../src/auth');
+    const testApp = require('express')();
+    testApp.use(require('express').json());
+
+    // Force auth by setting TOKEN_SECRET
+    const origSecret = process.env.TOKEN_SECRET;
+    process.env.TOKEN_SECRET = 'test-secret';
+
+    testApp.use(authMiddleware);
+    testApp.get('/api/test', (req, res) => res.json({ ok: true }));
+
+    const res = await request(testApp)
+      .get('/api/test')
+      .set('Authorization', 'Bearer invalid.token');
+    expect(res.statusCode).toEqual(401);
+
+    process.env.TOKEN_SECRET = origSecret || '';
   });
 });
 

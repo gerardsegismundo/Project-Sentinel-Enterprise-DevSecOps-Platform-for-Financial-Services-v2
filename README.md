@@ -6,7 +6,7 @@
 
 Project Sentinel is a cloud-native DevSecOps platform designed for financial services applications. It demonstrates secure software delivery by integrating Infrastructure as Code (IaC), Kubernetes, CI/CD automation, security scanning, compliance controls, and GitOps deployment strategies on AWS.
 
-The core workload is an **Express.js banking application** with hardened security controls (helmet, CORS, rate limiting, structured logging via Winston).
+The core workload is a **full-stack banking application** with a Next.js (TypeScript) frontend and Express.js API backend, featuring token-based authentication, a modern dark-mode UI with glassmorphism design, hardened security controls (helmet, CORS, rate limiting, structured logging via Winston), and production-ready DevSecOps practices.
 
 ---
 
@@ -72,6 +72,10 @@ The core workload is an **Express.js banking application** with hardened securit
        │                                    │              │
        │                                    ▼              ▼
        │                           Deploy Staging ──► DAST Scan
+       │                                    │              │
+       │                                    ├──► Performance Test (k6)
+       │                                    │              │
+       │                                    └──► Synthetic Monitoring
        │                                                │
        │                                                ▼
        └─────────────────────────────────── Deploy Production ──► Validate
@@ -106,54 +110,97 @@ The core workload is an **Express.js banking application** with hardened securit
 | Security Controls          | RBAC, NetworkPolicies, Pod Security Standards (`security/`) |
 | Tracing                    | OpenTelemetry, Jaeger (`monitoring/jaeger/`)              |
 | Centralized Logging        | Fluent Bit, OpenSearch, OpenSearch Dashboards (`monitoring/logging/`) |
-| Governance                 | CIS, NIST, PCI-DSS                                        |
+| Runtime Security           | Falco (`security/falco/`)                                |
+| TLS / Certificates         | cert-manager, Let's Encrypt (`security/tls/`)            |
+| Secrets Management         | External Secrets Operator → AWS Secrets Manager           |
+| Performance Testing        | k6 (`app/tests/performance/`)                            |
+| Synthetic Monitoring       | Custom Node.js probes (`app/tests/synthetic/`)           |
+| Incident Management        | PagerDuty, ServiceNow (AlertManager webhooks)            |
+| Governance                 | CIS, NIST 800-53, PCI-DSS, SOC 2 (`docs/compliance/`)   |
 
 ---
 
 ## Repository Structure
 
 ```text
-├── app/                       # Express.js banking application
+├── app/                       # Express.js API server
 │   ├── src/
-│   │   ├── index.js           # Main application server
+│   │   ├── index.js           # Main application server (serves Next.js static export in production)
+│   │   ├── auth.js            # Token-based authentication middleware
 │   │   ├── tracing.js         # OpenTelemetry SDK initialization
 │   │   ├── middleware.js      # Express middleware (helmet, CORS, rate limiting)
 │   │   ├── logger.js          # Winston structured logging
 │   │   ├── accounts.js        # Account data and helpers
 │   │   └── errors.js          # Error handling middleware
-│   ├── tests/                 # Jest unit and integration tests
+│   ├── tests/                 # Jest unit and integration tests (30 tests)
+│   │   ├── performance/       # k6 load test scripts (Golden Signals SLOs)
+│   │   └── synthetic/         # Synthetic health monitoring probes
 │   ├── package.json           # Dependencies (express, helmet, Winston, OpenTelemetry)
-│   └── Dockerfile             # Multi-stage container image
+│   └── Dockerfile             # Multi-stage container image (API only)
+├── client/                    # Next.js + TypeScript frontend (banking dashboard)
+│   ├── src/
+│   │   ├── app/page.tsx       # Main app with login, dashboard, transfer, health views
+│   │   ├── app/layout.tsx     # Root layout with Geist font and dark theme
+│   │   ├── app/globals.css    # Tailwind v4 design system (dark-mode-first)
+│   │   └── lib/api.ts         # Typed API client with token management
+│   └── package.json           # Next.js 16, React 19, Tailwind CSS 4, TypeScript
+├── Dockerfile                 # Full-stack production build (client + server)
 ├── terraform/                 # Infrastructure as Code
-│   ├── environments/dev/      # Dev environment configuration
-│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, tags)
+│   ├── environments/          # Per-environment configuration
+│   │   ├── dev/               # Development (10.0.0.0/16)
+│   │   ├── staging/           # Staging (10.1.0.0/16, S3 backend)
+│   │   └── production/        # Production (10.2.0.0/16, S3 backend)
+│   └── modules/               # Reusable Terraform modules (vpc, eks, ecr, iam, kms, tags)
+├── ansible/                   # Configuration management
+│   ├── playbooks/             # Ansible playbooks (site, eks, app, secrets, monitoring, hardening)
+│   ├── roles/                 # Roles: eks-node-config, app-deploy, secrets-manager, monitoring-setup, security-hardening, tls-setup
+│   ├── inventory/             # Environment inventories (dev, production)
+│   └── group_vars/            # Variables per environment
 ├── helm/
 │   └── banking-app/           # Helm chart (release name: trading-simulator)
 │       ├── templates/         # Kubernetes manifests
-│       ├── values.yaml        # Production defaults
+│       ├── values.yaml        # Base defaults
 │       ├── values-dev.yaml    # Development overrides
-│       └── values-staging.yaml
+│       ├── values-staging.yaml
+│       └── values-production.yaml  # Production (HA, TLS, autoscaling)
 ├── gitops/
+│   ├── appproject.yaml        # ArgoCD AppProject (RBAC-scoped)
 │   └── projects/              # ArgoCD Application manifests
 │       ├── trading-simulator-dev/
-│       └── trading-simulator-staging/
+│       ├── trading-simulator-staging/
+│       └── trading-simulator-prod/
 ├── security/                  # Kubernetes security controls
 │   ├── rbac/                  # Role-based access control policies
 │   ├── network-policies/      # Network segmentation policies
-│   └── kyverno/               # Policy-as-code (prepared, not applied)
+│   ├── kyverno/               # Policy-as-code (prepared, not applied)
+│   ├── falco/                 # Runtime security (DaemonSet + banking-specific rules)
+│   ├── tls/                   # cert-manager, ClusterIssuers, TLS enforcement policies
+│   └── secrets/               # External Secrets Operator manifests
 ├── monitoring/                # Observability stack
 │   ├── prometheus/            # Prometheus config, rules, and deployment
 │   ├── grafana/               # Grafana dashboards and datasources
 │   ├── alertmanager/          # Alert routing and receivers
 │   ├── jaeger/                # Distributed tracing (Jaeger all-in-one)
-│   └── logging/               # Centralized logging
-│       ├── fluentbit-deployment.yaml          # Log collector (DaemonSet)
-│       ├── opensearch-deployment.yaml         # Log storage (StatefulSet)
-│       └── opensearch-dashboards-deployment.yaml  # Log visualization
-├── runbooks/                  # Incident response runbooks
+│   ├── logging/               # Centralized logging (Fluent Bit → OpenSearch)
+│   └── dashboards/            # Grafana dashboard JSONs
+│       ├── golden-signals.json       # SRE golden signals
+│       ├── security-overview.json    # Security posture
+│       └── executive-overview.json   # Executive KPIs
+├── runbooks/                  # Operational runbooks
+│   ├── incident-response.md   # P1–P4 incident handling
+│   ├── deployment.md          # Deploy & rollback procedures
+│   ├── scaling.md             # Horizontal/vertical scaling
+│   ├── troubleshooting.md     # Common issues & diagnostics
+│   ├── disaster-recovery.md   # DR procedures (5 scenarios)
+│   └── security-incident.md   # Security incident response
 ├── docs/                      # Documentation
+│   ├── compliance/            # CIS, PCI-DSS, NIST 800-53, SOC 2 control mappings
+│   ├── demo/                  # Final demonstration guide & materials
+│   ├── operations.md          # Operational guide
+│   ├── cost-optimization.md   # AWS cost analysis & recommendations
+│   └── architecture-decisions.md  # ADRs
 └── .github/workflows/
-    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline
+    └── ci-cd.yml              # Full DevSecOps CI/CD pipeline (19 jobs)
 ```
 
 ---
@@ -200,6 +247,8 @@ The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main` and `d
 | Network Policies           | ✅ Deployed | `security/network-policies/network-policies.yaml` |
 | Pod Security Standards     | ✅ Deployed | `security/pod-security-standards.yaml`      |
 | Kyverno Policies           | 📋 Prepared | `security/kyverno/pod-security-policy.yaml` |
+| Falco Runtime Security     | ✅ Configured | `security/falco/falco-deployment.yaml`    |
+| External Secrets (ESO)     | ✅ Configured | `security/secrets/external-secrets.yaml`  |
 | Container Image Scanning   | ✅ Active   | CI/CD (Grype, Trivy)                        |
 | Secret Detection           | ✅ Active   | CI/CD (TruffleHog, GitLeaks)               |
 | IaC Security               | ✅ Active   | CI/CD (Checkov, tfsec)                     |
@@ -225,6 +274,7 @@ The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main` and `d
 | --------------- | ------------------------ | --------- |
 | Development      | `trading-simulator-dev`  | `banking` |
 | Staging          | `trading-simulator-staging` | `banking` |
+| Production       | `trading-simulator-prod` | `banking` |
 
 ---
 
@@ -247,14 +297,38 @@ terraform plan
 terraform apply
 ```
 
-### Application
+### API Server
 
 ```bash
 cd app
 npm install
 npm run lint
 npm test
-npm start
+npm start          # runs on http://localhost:3000
+```
+
+### Next.js Frontend
+
+```bash
+cd client
+npm install
+npm run dev        # runs on http://localhost:3000 (uses NEXT_PUBLIC_API_URL for API calls)
+npm run build      # static export to out/ (served by Express in production)
+```
+
+### Authentication
+
+The API uses token-based authentication. In development (no `TOKEN_SECRET` or `API_KEY` env vars set), auth is bypassed. In production, set `TOKEN_SECRET` to enable it.
+
+```bash
+# Login (demo accounts: admin, teller, viewer — any password)
+curl -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "any"}'
+
+# Use the returned token
+curl http://localhost:3000/api/accounts \
+  -H 'Authorization: Bearer <token>'
 ```
 
 ### Deploy to Kubernetes
@@ -282,11 +356,14 @@ The pipeline uses progressive OIDC bootstrapping (see `notes.txt`):
 
 ## Compliance
 
-| Framework | Controls Addressed                     |
-| --------- | -------------------------------------- |
-| CIS       | Network Policies, RBAC, Pod Security Standards |
-| PCI-DSS   | Access Control, Network Segmentation    |
-| NIST CSF  | Access Control (AC), Network Security (SC) |
+Detailed control mappings are in `docs/compliance/`.
+
+| Framework | Controls Addressed | Document |
+| --------- | -------------------------------------- | -------- |
+| CIS Kubernetes v1.8 | 24 controls: RBAC, Pod Security, NetworkPolicies, etcd, admission | `docs/compliance/cis-kubernetes-benchmark.md` |
+| PCI-DSS v4.0 | 12 requirements: network security, access control, monitoring, testing | `docs/compliance/pci-dss-controls.md` |
+| NIST SP 800-53 | 41 controls across 8 families: AC, AU, CM, IA, IR, RA, SC, SI | `docs/compliance/nist-800-53-mapping.md` |
+| SOC 2 Type II | 5 Trust Service Criteria: Security, Availability, Processing Integrity, Confidentiality, Privacy | `docs/compliance/soc2-controls.md` |
 
 ---
 

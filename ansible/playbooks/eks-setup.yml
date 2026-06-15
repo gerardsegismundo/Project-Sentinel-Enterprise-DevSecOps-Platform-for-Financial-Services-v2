@@ -1,0 +1,15 @@
+---
+- name: EKS Cluster Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - name: Update kubeconfig
+      ansible.builtin.command:
+        cmd: "aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ aws_region }}"
+      changed_when: true
+
+  roles:
+    - role: eks-node-config
+      tags: [eks]

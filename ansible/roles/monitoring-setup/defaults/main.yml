@@ -1,0 +1,13 @@
+---
+monitoring_manifests:
+  - "{{ playbook_dir }}/../../monitoring/prometheus/prometheus-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/grafana/grafana-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/alertmanager/alertmanager-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/jaeger/jaeger-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/logging/opensearch-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/logging/fluentbit-deployment.yaml"
+  - "{{ playbook_dir }}/../../monitoring/logging/opensearch-dashboards-deployment.yaml"
+
+grafana_dashboards:
+  - "{{ playbook_dir }}/../../monitoring/dashboards/dev-overview.json"
+  - "{{ playbook_dir }}/../../monitoring/dashboards/production-overview.json"

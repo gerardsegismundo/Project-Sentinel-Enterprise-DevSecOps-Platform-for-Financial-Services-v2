@@ -1,0 +1,207 @@
+{
+  "dashboard": {
+    "title": "Executive Overview — Project Sentinel",
+    "tags": ["executive", "overview", "banking"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "1m",
+    "time": { "from": "now-7d", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Availability (7d)",
+        "type": "gauge",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "avg_over_time((sum(kube_deployment_status_replicas_ready{namespace=\"banking\",deployment=\"trading-simulator\"}) / sum(kube_deployment_spec_replicas{namespace=\"banking\",deployment=\"trading-simulator\"}))[7d:5m]) * 100",
+            "legendFormat": "Availability"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 95,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 95 },
+                { "color": "yellow", "value": 99 },
+                { "color": "green", "value": 99.9 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Transactions (7d)",
+        "type": "stat",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(increase(http_requests_total{namespace=\"banking\"}[7d]))",
+            "legendFormat": "Transactions"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                { "color": "blue", "value": 0 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate (7d avg)",
+        "type": "gauge",
+        "gridPos": { "x": 12, "y": 0, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "avg_over_time((sum(rate(http_requests_total{namespace=\"banking\",status=~\"5..\"}[1h])) / sum(rate(http_requests_total{namespace=\"banking\"}[1h])))[7d:1h]) * 100",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 10,
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Security Alerts (7d)",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(increase(falco_events_total[7d])) or vector(0)",
+            "legendFormat": "Security Alerts"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 10 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Response Time Trend (P95)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[1h])) by (le))",
+            "legendFormat": "P95 Latency"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Traffic Volume Trend",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\"}[1h]))",
+            "legendFormat": "RPS (1h avg)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "reqps" }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Infrastructure Cost Indicators",
+        "type": "table",
+        "gridPos": { "x": 0, "y": 14, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "count(kube_node_info)",
+            "format": "table",
+            "legendFormat": "Node Count"
+          },
+          {
+            "expr": "sum(kube_pod_info{namespace=\"banking\"})",
+            "format": "table",
+            "legendFormat": "Running Pods"
+          },
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"banking\"}) / 1024 / 1024 / 1024",
+            "format": "table",
+            "legendFormat": "Memory Usage (GiB)"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Deployment Frequency (7d)",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 14, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "count(changes(kube_deployment_status_observed_generation{namespace=\"banking\"}[7d]))",
+            "legendFormat": "Deployments"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                { "color": "blue", "value": 0 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Compliance Status",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 14, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(kyverno_policy_results_total{rule_result=\"pass\"}) / (sum(kyverno_policy_results_total{rule_result=\"pass\"}) + sum(kyverno_policy_results_total{rule_result=\"fail\"})) * 100 or vector(100)",
+            "legendFormat": "Policy Compliance"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "yellow", "value": 90 },
+                { "color": "green", "value": 99 }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

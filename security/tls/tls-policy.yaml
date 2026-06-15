@@ -1,0 +1,87 @@
+---
+# Kyverno policy: Enforce TLS on all Ingress resources in banking namespace
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ingress-tls
+  annotations:
+    policies.kyverno.io/title: Require Ingress TLS
+    policies.kyverno.io/category: Security, PCI-DSS
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      All Ingress resources in the banking namespace must have TLS configured
+      to ensure data in transit is encrypted (PCI-DSS Req 4.1).
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-tls-section
+      match:
+        any:
+          - resources:
+              kinds:
+                - Ingress
+              namespaces:
+                - banking
+      validate:
+        message: "Ingress must have TLS configured (PCI-DSS Req 4.1 — encrypt data in transit)"
+        pattern:
+          spec:
+            tls:
+              - hosts:
+                  - "*"
+                secretName: "?*"
+    - name: enforce-tls-redirect
+      match:
+        any:
+          - resources:
+              kinds:
+                - Ingress
+              namespaces:
+                - banking
+      validate:
+        message: "Ingress must have ssl-redirect annotation set to true"
+        pattern:
+          metadata:
+            annotations:
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+---
+# NetworkPolicy: Enforce mTLS between services via Istio/Linkerd sidecar
+# This is a placeholder — actual mTLS is handled by the service mesh
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: require-encrypted-traffic
+  namespace: banking
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: banking
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: banking
+      ports:
+        - protocol: TCP
+          port: 3000
+    - to: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53

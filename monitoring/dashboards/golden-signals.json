@@ -1,0 +1,205 @@
+{
+  "dashboard": {
+    "title": "Golden Signals — Trading Simulator",
+    "tags": ["golden-signals", "banking", "sre"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Latency — P50 / P95 / P99 Response Time",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{namespace=\"banking\"}[5m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Traffic — Requests per Second",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\"}[5m]))",
+            "legendFormat": "Total RPS"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"2..\"}[5m]))",
+            "legendFormat": "2xx"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"4..\"}[5m]))",
+            "legendFormat": "4xx"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"5..\"}[5m]))",
+            "legendFormat": "5xx"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "reqps" }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Errors — Error Rate (%)",
+        "type": "gauge",
+        "gridPos": { "x": 0, "y": 8, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{namespace=\"banking\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{namespace=\"banking\"}[5m])) * 100",
+            "legendFormat": "Error Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            },
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Errors — 5xx Count Over Time",
+        "type": "timeseries",
+        "gridPos": { "x": 6, "y": 8, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(increase(http_requests_total{namespace=\"banking\",status=~\"5..\"}[5m]))",
+            "legendFormat": "5xx errors (5m window)"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Saturation — CPU Usage",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 8, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"banking\",container=\"banking-app\"}[5m])) by (pod)",
+            "legendFormat": "{{ pod }}"
+          },
+          {
+            "expr": "sum(kube_pod_container_resource_limits{namespace=\"banking\",resource=\"cpu\"})",
+            "legendFormat": "CPU Limit"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "short" }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Saturation — Memory Usage",
+        "type": "timeseries",
+        "gridPos": { "x": 18, "y": 8, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"banking\",container=\"banking-app\"}) by (pod)",
+            "legendFormat": "{{ pod }}"
+          },
+          {
+            "expr": "sum(kube_pod_container_resource_limits{namespace=\"banking\",resource=\"memory\"})",
+            "legendFormat": "Memory Limit"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "bytes" }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Availability — Pod Ready Status",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 14, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(kube_deployment_status_replicas_ready{namespace=\"banking\",deployment=\"trading-simulator\"}) / sum(kube_deployment_spec_replicas{namespace=\"banking\",deployment=\"trading-simulator\"}) * 100",
+            "legendFormat": "Availability"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "yellow", "value": 99 },
+                { "color": "green", "value": 99.9 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Pod Restarts (last 24h)",
+        "type": "stat",
+        "gridPos": { "x": 6, "y": 14, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"banking\"}[24h]))",
+            "legendFormat": "Restarts"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "HPA — Current vs Desired Replicas",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 14, "w": 12, "h": 4 },
+        "targets": [
+          {
+            "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"banking\"}",
+            "legendFormat": "Current"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"banking\"}",
+            "legendFormat": "Desired"
+          },
+          {
+            "expr": "kube_horizontalpodautoscaler_spec_max_replicas{namespace=\"banking\"}",
+            "legendFormat": "Max"
+          }
+        ]
+      }
+    ]
+  }
+}

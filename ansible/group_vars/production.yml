@@ -1,0 +1,26 @@
+---
+# Production environment variables
+
+environment: production
+eks_cluster_name: project-sentinel-prod
+aws_account_id: "{{ vault_aws_account_id }}"
+
+# Scaling
+app_replicas: 3
+app_min_replicas: 3
+app_max_replicas: 10
+
+# Resources
+app_cpu_request: "250m"
+app_cpu_limit: "500m"
+app_memory_request: "256Mi"
+app_memory_limit: "512Mi"
+
+# Monitoring
+prometheus_retention: 30d
+opensearch_replicas: 3
+grafana_anonymous_access: false
+
+# Security — strict for production
+network_policy_strict: true
+enable_falco: true
