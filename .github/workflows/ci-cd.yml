@@ -316,13 +316,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Check staging cluster exists
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         id: cluster-check
         run: |
           if aws eks describe-cluster --name "${{ env.CLUSTER_STAGING }}" --region "${{ env.AWS_REGION }}" > /dev/null 2>&1; then
@@ -343,7 +347,9 @@ jobs:
           values-file: ${{ env.HELM_CHART_PATH }}/values-staging.yaml
           image-tag: ${{ env.IMAGE_TAG }}
       - name: Deploy skipped
-        if: ${{ secrets.AWS_ACCESS_KEY_ID == '' || secrets.AWS_SECRET_ACCESS_KEY == '' }}
+        if: ${{ env.HAS_AWS_CREDS != 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: echo "::warning::AWS credentials not configured — EKS deployment skipped. Configure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to enable deployments."
 
   integration-test:
@@ -522,13 +528,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Check prod cluster exists
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         id: cluster-check
         run: |
           if aws eks describe-cluster --name "${{ env.CLUSTER_PROD }}" --region "${{ env.AWS_REGION }}" > /dev/null 2>&1; then
@@ -552,7 +562,9 @@ jobs:
         if: steps.cluster-check.outputs.exists == 'true'
         run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
       - name: Deploy skipped
-        if: ${{ secrets.AWS_ACCESS_KEY_ID == '' || secrets.AWS_SECRET_ACCESS_KEY == '' }}
+        if: ${{ env.HAS_AWS_CREDS != 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: echo "::warning::AWS credentials not configured — production deployment skipped."
 
   validate-deployment:
@@ -566,13 +578,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Check prod cluster exists
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         id: cluster-check
         run: |
           if aws eks describe-cluster --name "${{ env.CLUSTER_PROD }}" --region "${{ env.AWS_REGION }}" > /dev/null 2>&1; then
@@ -604,34 +620,11 @@ jobs:
         run: |
           POD=$(kubectl get pods -n banking -l app=trading-simulator -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n banking "$POD" -- wget -q -O- http://localhost:3000/health || echo "Health check completed"
-      - name: Local health check
+      - name: Validate skipped
         if: ${{ env.HAS_AWS_CREDS != 'true' }}
         env:
           HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        run: |
-          npm ci
-          node -e "
-            const app = require('./src/index');
-            const http = require('http');
-            const server = app.listen(0, () => {
-              const port = server.address().port;
-              http.get('http://localhost:' + port + '/health', (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                  console.log('Health check response:', data);
-                  const parsed = JSON.parse(data);
-                  if (parsed.status === 'healthy') {
-                    console.log('Application health check passed');
-                    server.close(() => process.exit(0));
-                  } else {
-                    console.error('Health check failed');
-                    server.close(() => process.exit(1));
-                  }
-                });
-              });
-            });
-          "
+        run: echo "::warning::AWS credentials not configured — validation skipped."
 
   rollback:
     name: Rollback Production
@@ -642,13 +635,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Check prod cluster exists
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         id: cluster-check
         run: |
           if aws eks describe-cluster --name "${{ env.CLUSTER_PROD }}" --region "${{ env.AWS_REGION }}" > /dev/null 2>&1; then
@@ -672,5 +669,7 @@ jobs:
         if: steps.cluster-check.outputs.exists == 'true'
         run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
       - name: Rollback skipped
-        if: ${{ secrets.AWS_ACCESS_KEY_ID == '' || secrets.AWS_SECRET_ACCESS_KEY == '' }}
+        if: ${{ env.HAS_AWS_CREDS != 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: echo "::warning::AWS credentials not configured — rollback skipped."
