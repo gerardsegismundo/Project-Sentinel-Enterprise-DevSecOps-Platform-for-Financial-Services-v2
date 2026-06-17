@@ -39,7 +39,7 @@ jobs:
         working-directory: ./app
         run: npm test -- --coverage
       - name: Install and build client
-         working-directory: ./app/client
+        working-directory: ./app/client
         run: |
           npm ci
           npm run build
