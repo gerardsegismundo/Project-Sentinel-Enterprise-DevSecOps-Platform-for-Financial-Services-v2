@@ -8,7 +8,7 @@
     "start:no-trace": "node dist/index.js",
     "dev": "ts-node --watch server/index.ts",
     "build": "tsc",
-    "lint": "eslint server/",
+    "lint": "eslint \"server/**/*.ts\"",
     "test": "jest",
     "test:integration": "jest --testPathPattern=integration"
   },
@@ -32,7 +32,6 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/express": "^4.17.25",
     "@types/node": "^20.19.43",
-    "@types/winston": "^2.4.4",
     "eslint": "^8.55.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.2",
