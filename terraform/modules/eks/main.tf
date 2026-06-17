@@ -79,6 +79,11 @@ module "eks" {
       iam_role_additional_policies = {
         AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
+
+      # Prevent Terraform from fighting AWS-managed version upgrades
+      lifecycle = {
+        ignore_changes = ["release_version"]
+      }
     }
   }
 
