@@ -59,9 +59,8 @@ module "ecr" {
   environment     = var.environment
   owner           = var.owner
 
-  scan_on_push         = true
-  encryption           = "AES256"
-  image_tag_mutability = "MUTABLE"
+  scan_on_push = true
+  encryption   = "AES256"
 }
 
 module "iam" {
