@@ -11,7 +11,7 @@ if (process.env.OTEL_LOG_LEVEL === 'debug') {
     api_1.diag.setLogger(new api_1.DiagConsoleLogger(), api_1.DiagLogLevel.DEBUG);
 }
 const sdk = new sdk_node_1.NodeSDK({
-    resource: new resources_1.Resource({
+    resource: (0, resources_1.resourceFromAttributes)({
         [semantic_conventions_1.ATTR_SERVICE_NAME]: 'banking-app',
         [semantic_conventions_1.ATTR_SERVICE_VERSION]: process.env.npm_package_version || '1.0.0',
         'deployment.environment': process.env.NODE_ENV || 'development',

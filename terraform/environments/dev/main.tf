@@ -7,6 +7,14 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket       = "project-sentinel-tfstate-866934333672"
+    key          = "dev/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 locals {
@@ -64,6 +72,7 @@ module "iam" {
   create_github_actions_role = true
   github_actions_repo        = "${var.github_org}/${var.github_repo}"
   github_actions_branch      = var.environment == "dev" ? "develop" : "main"
+  terraform_state_bucket     = "project-sentinel-tfstate-866934333672"
 }
 
 module "eks" {

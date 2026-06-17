@@ -96,6 +96,8 @@ spec:
       serviceAccountName: fluent-bit
       containers:
       - name: fluent-bit
+        securityContext:
+          allowPrivilegeEscalation: false
         image: fluent/fluent-bit:3.0
         ports:
         - containerPort: 2020

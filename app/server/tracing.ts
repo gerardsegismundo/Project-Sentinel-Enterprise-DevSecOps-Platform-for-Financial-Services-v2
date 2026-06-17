@@ -1,9 +1,9 @@
-const { NodeSDK } = require('@opentelemetry/sdk-node');
-const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
-const { Resource } = require('@opentelemetry/resources');
-const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = require('@opentelemetry/semantic-conventions');
-const { diag, DiagConsoleLogger, DiagLogLevel } = require('@opentelemetry/api');
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 
 const OTEL_EXPORTER_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://jaeger-collector:4318';
 
@@ -12,7 +12,7 @@ if (process.env.OTEL_LOG_LEVEL === 'debug') {
 }
 
 const sdk = new NodeSDK({
-  resource: new Resource({
+  resource: resourceFromAttributes({
     [ATTR_SERVICE_NAME]: 'banking-app',
     [ATTR_SERVICE_VERSION]: process.env.npm_package_version || '1.0.0',
     'deployment.environment': process.env.NODE_ENV || 'development',
@@ -35,4 +35,4 @@ process.on('SIGTERM', () => {
   sdk.shutdown().catch(console.error).finally(() => process.exit(0));
 });
 
-module.exports = sdk;
+export default sdk;

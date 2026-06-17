@@ -19,15 +19,16 @@ function applyMiddleware(app) {
             : false;
     app.use((0, cors_1.default)({ origin: allowedOrigins }));
     app.use(express_1.default.json({ limit: '100kb' }));
-    app.use((err, _req, res, next) => {
+    app.use(((err, _req, res, next) => {
         if (err.type === 'entity.parse.failed') {
             logger_1.default.warn('Malformed JSON in request body', { ip: 'unknown' });
             return res.status(400).json({ error: 'Malformed JSON in request body' });
         }
         next(err);
-    });
-    app.use((req, _res, next) => {
+    }));
+    app.use((req, res, next) => {
         req.requestId = crypto_1.default.randomUUID();
+        res.setHeader('X-Request-Id', req.requestId);
         next();
     });
     const limiter = (0, express_rate_limit_1.default)({

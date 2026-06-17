@@ -29,7 +29,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             ./app/package-lock.json
-            ./client/package-lock.json
+            ./app/client/package-lock.json
       - name: Install and lint server
         working-directory: ./app
         run: |
@@ -39,7 +39,7 @@ jobs:
         working-directory: ./app
         run: npm test -- --coverage
       - name: Install and build client
-        working-directory: ./client
+        working-directory: ./app/client
         run: |
           npm ci
           npm run build
@@ -177,10 +177,9 @@ jobs:
         if: steps.login-ecr.outcome == 'success'
         run: |
           docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
           docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
       - name: ECR push skipped
         if: steps.login-ecr.outcome == 'skipped'

@@ -34,6 +34,8 @@ spec:
           privileged: true
       containers:
       - name: opensearch
+        securityContext:
+          allowPrivilegeEscalation: false
         image: opensearchproject/opensearch:2.14.0
         ports:
         - containerPort: 9200

@@ -78,13 +78,15 @@ function authMiddleware(req, res, next) {
             return next();
         }
         logger_1.default.warn('Invalid or expired token', { ip: req.headers['x-forwarded-for'] || 'unknown' });
-        return res.status(401).json({ error: 'Invalid or expired token' });
+        res.status(401).json({ error: 'Invalid or expired token' });
+        return;
     }
     if (!apiKey && !process.env.TOKEN_SECRET) {
         return next();
     }
     logger_1.default.warn('Missing authentication', { path: req.path, ip: req.headers['x-forwarded-for'] || 'unknown' });
-    return res.status(401).json({ error: 'Authentication required' });
+    res.status(401).json({ error: 'Authentication required' });
+    return;
 }
 function findUserByUsername(username) {
     return USERS.find(u => u.username === username);

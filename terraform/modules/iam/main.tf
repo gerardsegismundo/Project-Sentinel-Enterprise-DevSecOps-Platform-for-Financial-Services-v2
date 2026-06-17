@@ -40,6 +40,24 @@ resource "aws_iam_role" "github_actions" {
   tags = module.tags.tags
 }
 
+resource "aws_iam_role_policy" "github_actions_terraform_state" {
+  count = var.create_github_actions_role && var.terraform_state_bucket != "" ? 1 : 0
+
+  name = "TerraformStateAccess"
+  role = aws_iam_role.github_actions[0].name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetBucketVersioning", "s3:GetBucketLocation"]
+        Resource = ["arn:aws:s3:::${var.terraform_state_bucket}", "arn:aws:s3:::${var.terraform_state_bucket}/*"]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
   count = var.create_github_actions_role ? 1 : 0
 

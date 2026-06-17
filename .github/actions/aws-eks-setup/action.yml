@@ -30,4 +30,7 @@ runs:
     - if: inputs.install-kubectl == 'true'
       uses: azure/setup-kubectl@v3
     - shell: bash
-      run: aws eks update-kubeconfig --name ${{ inputs.cluster-name }} --region ${{ inputs.aws-region }}
+      env:
+        CLUSTER_NAME: ${{ inputs.cluster-name }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"

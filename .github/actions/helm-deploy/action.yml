@@ -41,12 +41,21 @@ runs:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
     - shell: bash
-      run: aws eks update-kubeconfig --name ${{ inputs.cluster-name }} --region ${{ inputs.aws-region }}
+      env:
+        CLUSTER_NAME: ${{ inputs.cluster-name }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
     - shell: bash
+      env:
+        RELEASE_NAME: ${{ inputs.release-name }}
+        CHART_PATH: ${{ inputs.chart-path }}
+        VALUES_FILE: ${{ inputs.values-file }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        NAMESPACE: ${{ inputs.namespace }}
       run: |
-        helm upgrade --install ${{ inputs.release-name }} ${{ inputs.chart-path }} \
-          --values ${{ inputs.values-file }} \
-          --set image.tag=${{ inputs.image-tag }} \
-          --namespace ${{ inputs.namespace }} \
+        helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+          --values "$VALUES_FILE" \
+          --set image.tag="$IMAGE_TAG" \
+          --namespace "$NAMESPACE" \
           --create-namespace \
           --wait
