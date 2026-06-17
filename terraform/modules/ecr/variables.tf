@@ -25,6 +25,12 @@ variable "encryption" {
   default     = "KMS"
 }
 
+variable "image_tag_mutability" {
+  description = "ECR image tag mutability: MUTABLE or IMMUTABLE"
+  type        = string
+  default     = "IMMUTABLE"
+}
+
 variable "kms_key_arn" {
   description = "KMS Key ARN for ECR encryption (leave empty for AWS managed key)"
   type        = string
