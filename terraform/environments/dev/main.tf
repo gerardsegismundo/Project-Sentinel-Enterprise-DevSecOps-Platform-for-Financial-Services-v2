@@ -72,6 +72,7 @@ module "iam" {
   create_github_actions_role = true
   github_actions_repo        = "${var.github_org}/${var.github_repo}"
   github_actions_branch      = var.environment == "dev" ? "develop" : "main"
+  terraform_state_bucket     = "project-sentinel-tfstate-866934333672"
 }
 
 module "eks" {

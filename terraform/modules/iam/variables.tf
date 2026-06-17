@@ -31,3 +31,9 @@ variable "github_actions_branch" {
   type        = string
   default     = "main"
 }
+
+variable "terraform_state_bucket" {
+  description = "S3 bucket name for Terraform state — grants the role read/write access"
+  type        = string
+  default     = ""
+}
