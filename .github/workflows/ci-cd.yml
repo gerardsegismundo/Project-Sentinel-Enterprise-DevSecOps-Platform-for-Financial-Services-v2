@@ -178,6 +178,7 @@ jobs:
         run: |
           docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
+          docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:dev
       - name: ECR push skipped
@@ -511,28 +512,10 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - name: Check prod cluster exists
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        id: cluster-check
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        run: |
-          if aws eks describe-cluster --name "$CLUSTER_PROD" --region "$AWS_REGION" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::Production cluster $CLUSTER_PROD not found — deployment skipped."
-          fi
       - name: Deploy to EKS (production)
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         uses: ./.github/actions/helm-deploy
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -543,7 +526,9 @@ jobs:
           values-file: ${{ env.HELM_CHART_PATH }}/values.yaml
           image-tag: ${{ env.IMAGE_TAG }}
       - name: Verify rollout
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
       - name: Deploy skipped
         if: ${{ env.HAS_AWS_CREDS != 'true' }}
@@ -561,28 +546,10 @@ jobs:
         working-directory: ./app
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - name: Check prod cluster exists
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        id: cluster-check
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        run: |
-          if aws eks describe-cluster --name "$CLUSTER_PROD" --region "$AWS_REGION" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::Production cluster $CLUSTER_PROD not found — validation skipped."
-          fi
       - name: Validate on EKS
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         uses: ./.github/actions/aws-eks-setup
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -590,7 +557,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           cluster-name: ${{ env.CLUSTER_PROD }}
       - name: Verify pod health
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: |
           READY=$(kubectl get deployment trading-simulator -n banking -o jsonpath='{.status.readyReplicas}')
           DESIRED=$(kubectl get deployment trading-simulator -n banking -o jsonpath='{.spec.replicas}')
@@ -600,7 +569,9 @@ jobs:
           fi
           echo "Deployment validation passed: $READY/$DESIRED pods ready"
       - name: Check application health
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: |
           POD=$(kubectl get pods -n banking -l app=trading-simulator -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n banking "$POD" -- wget -q -O- http://localhost:3000/health || echo "Health check completed"
@@ -641,28 +612,10 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      - name: Check prod cluster exists
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        id: cluster-check
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        run: |
-          if aws eks describe-cluster --name "$CLUSTER_PROD" --region "$AWS_REGION" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::Production cluster $CLUSTER_PROD not found — rollback skipped."
-          fi
       - name: Rollback on EKS
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         uses: ./.github/actions/aws-eks-setup
         with:
           aws-region: ${{ env.AWS_REGION }}
@@ -670,10 +623,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           cluster-name: ${{ env.CLUSTER_PROD }}
       - name: Helm rollback
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: helm rollback trading-simulator -n banking
       - name: Verify rollback
-        if: ${{ env.HAS_AWS_CREDS == 'true' && steps.cluster-check.outputs.exists == 'true' }}
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
       - name: Rollback skipped
         if: ${{ env.HAS_AWS_CREDS != 'true' }}
