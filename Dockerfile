@@ -22,7 +22,7 @@ WORKDIR /app
 COPY --from=server-builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
 COPY --from=server-builder --chown=nodeapp:nodejs /app/dist ./server
 COPY --from=server-builder --chown=nodeapp:nodejs /app/server/tracing.ts ./tracing.ts
-COPY --from=client-builder --chown=nodeapp:nodejs /app/client/out ../client/out
+COPY --from=client-builder --chown=nodeapp:nodejs /app/client/out /app/client/out
 USER nodeapp
 EXPOSE 3000
 ENV NODE_ENV=production \
