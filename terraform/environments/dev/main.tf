@@ -9,11 +9,11 @@ terraform {
   }
 
   backend "s3" {
-    bucket      = "project-sentinel-tfstate-866934333672"
-    key         = "dev/terraform.tfstate"
-    region      = "us-east-1"
+    bucket       = "project-sentinel-tfstate-866934333672"
+    key          = "dev/terraform.tfstate"
+    region       = "us-east-1"
     use_lockfile = true
-    encrypt     = true
+    encrypt      = true
   }
 }
 
