@@ -9,12 +9,9 @@ private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
 # EKS
-eks_cluster_version   = "1.28"
+eks_cluster_version   = "1.30"
 eks_api_allowed_cidrs = ["0.0.0.0/0"]
 
 # GitHub
 github_org  = "gerardsegismundo"
 github_repo = "Project-Sentinel"
-
-# Reuse existing EIP to avoid AddressLimitExceeded
-nat_eip_ids = ["eipalloc-0f534e8d31967f1fd"]

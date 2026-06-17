@@ -43,7 +43,7 @@ variable "public_subnet_cidrs" {
 variable "eks_cluster_version" {
   description = "Kubernetes version for EKS"
   type        = string
-  default     = "1.28"
+  default     = "1.30"
 }
 
 variable "eks_api_allowed_cidrs" {
@@ -62,10 +62,4 @@ variable "github_repo" {
   description = "GitHub repository name"
   type        = string
   default     = "Project-Sentinel"
-}
-
-variable "nat_eip_ids" {
-  description = "Existing EIP allocation IDs to reuse for NAT Gateway"
-  type        = list(string)
-  default     = []
 }
