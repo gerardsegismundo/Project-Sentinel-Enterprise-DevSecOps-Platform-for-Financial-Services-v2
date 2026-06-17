@@ -7,6 +7,14 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket         = "project-sentinel-terraform-state"
+    key            = "dev/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-lock"
+    encrypt        = true
+  }
 }
 
 locals {
@@ -40,6 +48,7 @@ module "vpc" {
   azs             = data.aws_availability_zones.available.names
   private_subnets = var.private_subnet_cidrs
   public_subnets  = var.public_subnet_cidrs
+  nat_eip_ids     = var.nat_eip_ids
 
   owner = var.owner
 }

@@ -15,3 +15,6 @@ eks_api_allowed_cidrs = ["0.0.0.0/0"]
 # GitHub
 github_org  = "gerardsegismundo"
 github_repo = "Project-Sentinel"
+
+# Reuse existing EIP to avoid AddressLimitExceeded
+nat_eip_ids = ["eipalloc-0f534e8d31967f1fd"]

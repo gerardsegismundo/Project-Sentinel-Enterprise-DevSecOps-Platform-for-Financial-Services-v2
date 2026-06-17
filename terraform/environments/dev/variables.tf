@@ -63,3 +63,9 @@ variable "github_repo" {
   type        = string
   default     = "Project-Sentinel"
 }
+
+variable "nat_eip_ids" {
+  description = "Existing EIP allocation IDs to reuse for NAT Gateway"
+  type        = list(string)
+  default     = []
+}

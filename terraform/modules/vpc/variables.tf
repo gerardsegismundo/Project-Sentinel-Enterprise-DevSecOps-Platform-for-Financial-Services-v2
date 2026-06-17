@@ -35,3 +35,9 @@ variable "kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "nat_eip_ids" {
+  description = "List of EIP allocation IDs to reuse for NAT Gateway (dev only)"
+  type        = list(string)
+  default     = []
+}

@@ -21,6 +21,8 @@ module "vpc" {
 
   enable_nat_gateway   = true
   single_nat_gateway   = var.environment == "dev"
+  reuse_nat_ips        = var.environment == "dev"
+  external_nat_ip_ids  = var.environment == "dev" ? var.nat_eip_ids : []
   enable_dns_hostnames = true
   enable_dns_support   = true
   enable_flow_log      = false
