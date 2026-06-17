@@ -58,4 +58,5 @@ runs:
           --set image.tag="$IMAGE_TAG" \
           --namespace "$NAMESPACE" \
           --create-namespace \
-          --wait
+          --timeout 10m \
+          --atomic
