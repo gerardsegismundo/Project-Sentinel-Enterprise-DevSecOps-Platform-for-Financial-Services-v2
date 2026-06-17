@@ -122,10 +122,10 @@ app.post('/api/transfer', (req: Request, res: Response) => {
   res.json({ message: 'Transfer successful', fromBalance: fromAccount.balance, toBalance: toAccount.balance });
 });
 
-// Serve Next.js static export when available
+// Serve Next.js static export when available (skip in test env)
 const clientBuildPath = path.join(__dirname, '..', 'client', 'out');
 const clientIndexPath = path.join(clientBuildPath, 'index.html');
-if (fs.existsSync(clientIndexPath)) {
+if (fs.existsSync(clientIndexPath) && process.env.NODE_ENV !== 'test') {
   app.use(express.static(clientBuildPath));
   app.get('*', (req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('/api/') || req.path === '/health') {

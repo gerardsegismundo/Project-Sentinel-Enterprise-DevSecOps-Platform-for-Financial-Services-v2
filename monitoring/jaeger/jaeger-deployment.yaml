@@ -31,6 +31,8 @@ spec:
     spec:
       containers:
       - name: jaeger
+        securityContext:
+          allowPrivilegeEscalation: false
         image: jaegertracing/all-in-one:1.57
         args:
           - "--memory.max-traces=50000"

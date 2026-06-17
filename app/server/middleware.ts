@@ -31,8 +31,9 @@ function applyMiddleware(app: Express): void {
     next(err);
   }) as unknown as express.ErrorRequestHandler);
 
-  app.use((req: Request, _res: Response, next: NextFunction) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     req.requestId = crypto.randomUUID();
+    res.setHeader('X-Request-Id', req.requestId);
     next();
   });
 

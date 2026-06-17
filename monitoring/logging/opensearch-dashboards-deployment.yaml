@@ -17,6 +17,8 @@ spec:
     spec:
       containers:
       - name: opensearch-dashboards
+        securityContext:
+          allowPrivilegeEscalation: false
         image: opensearchproject/opensearch-dashboards:2.14.0
         ports:
         - containerPort: 5601

@@ -52,6 +52,9 @@
         "lines": 50,
         "statements": 50
       }
+    },
+    "transform": {
+      "^.+\\.(ts|tsx)$": "ts-jest"
     }
   }
 }
