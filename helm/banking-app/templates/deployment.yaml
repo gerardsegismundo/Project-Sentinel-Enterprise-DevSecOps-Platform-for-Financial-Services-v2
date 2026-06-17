@@ -52,7 +52,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "banking-app"
             - name: NODE_OPTIONS
-              value: "--require ./src/tracing.js"
+              value: {{ if .Values.tracing.enabled }}"--require ./server/tracing.js"{{ else }}""{{ end }}
             - name: AUTH_ENABLED
               value: "true"
             - name: TOKEN_SECRET
