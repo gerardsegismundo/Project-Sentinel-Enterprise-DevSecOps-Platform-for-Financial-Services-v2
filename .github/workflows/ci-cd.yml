@@ -29,7 +29,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             ./app/package-lock.json
-            ./client/package-lock.json
+            ./app/client/package-lock.json
       - name: Install and lint server
         working-directory: ./app
         run: |
@@ -39,7 +39,7 @@ jobs:
         working-directory: ./app
         run: npm test -- --coverage
       - name: Install and build client
-        working-directory: ./client
+         working-directory: ./app/client
         run: |
           npm ci
           npm run build
