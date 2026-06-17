@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY server/ ./server/
+COPY tsconfig.json ./tsconfig.json
 RUN npm run build
 
 FROM node:20-alpine AS production

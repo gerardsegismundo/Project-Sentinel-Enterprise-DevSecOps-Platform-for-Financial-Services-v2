@@ -12,6 +12,7 @@ FROM node:20-alpine AS server-builder
 WORKDIR /app
 COPY app/package*.json ./
 RUN npm ci --only=production
+COPY app/tsconfig.json ./tsconfig.json
 COPY app/server/ ./server/
 # Build server TypeScript
 RUN npm run build --if-present || npx tsc -p tsconfig.json
