@@ -222,6 +222,25 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
+  terraform-github-environments:
+    name: Terraform GitHub Environments
+    needs: iac-scan
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Apply GitHub environment protection rules
+        working-directory: terraform/environments/github
+        run: |
+          terraform init
+          terraform apply -auto-approve
+        env:
+          TF_VAR_github_token: ${{ secrets.GH_TOKEN }}
+          TF_VAR_github_org: ${{ secrets.GH_ORG }}
+          TF_VAR_github_repo: ${{ github.event.repository.name }}
+          TF_VAR_reviewer_ids: ${{ secrets.REVIEWER_IDS }}
+
   terraform-apply:
     name: Terraform Apply Dev
     needs: iac-scan
