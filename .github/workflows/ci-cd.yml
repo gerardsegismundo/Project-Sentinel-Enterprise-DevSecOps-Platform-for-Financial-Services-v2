@@ -481,18 +481,9 @@ jobs:
           name: synthetic-monitoring-report
           path: synthetic-report.json
 
-  approval-gate:
-    name: Await Production Approval
-    needs: [container-scan, integration-test, dast-scan, performance-test, synthetic-monitoring]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-latest
-    environment: production-approval
-    steps:
-      - run: echo "Approved for production deployment"
-
   deploy-production:
     name: Deploy Production
-    needs: [approval-gate]
+    needs: [container-scan, integration-test, dast-scan, performance-test, synthetic-monitoring]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     environment: production
@@ -644,5 +635,3 @@ jobs:
         env:
           HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: echo "::warning::AWS credentials not configured — rollback skipped."
-
-        ## Additional jobs for notifications, monitoring, etc. can be added here
