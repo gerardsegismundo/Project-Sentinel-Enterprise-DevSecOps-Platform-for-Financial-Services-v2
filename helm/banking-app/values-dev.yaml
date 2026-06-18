@@ -5,7 +5,7 @@ image:
   tag: "latest"
 
 service:
-  type: LoadBalancer
+  type: NodePort
 
 ingress:
   enabled: false
