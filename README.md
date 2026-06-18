@@ -16,7 +16,8 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 
 ## Architecture
 
-<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/eaa99d49-d661-47bb-87f5-5873879f45a6" />
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/415fa782-ffd5-4c50-86e7-2615e9594604" />
+
 
 
 
