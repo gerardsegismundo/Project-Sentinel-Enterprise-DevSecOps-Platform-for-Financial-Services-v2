@@ -481,10 +481,19 @@ jobs:
           name: synthetic-monitoring-report
           path: synthetic-report.json
 
+  approval-gate:
+    name: Await Production Approval
+    needs: [container-scan, integration-test, dast-scan, performance-test, synthetic-monitoring]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    environment: production-approval
+    steps:
+      - run: echo "Approved for production deployment"
+
   deploy-production:
     name: Deploy Production
-    needs: [container-scan, integration-test, dast-scan, performance-test, synthetic-monitoring]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
+    needs: [approval-gate]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     environment: production
     steps:
