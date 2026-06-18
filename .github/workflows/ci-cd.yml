@@ -225,7 +225,10 @@ jobs:
   terraform-github-environments:
     name: Terraform GitHub Environments
     needs: iac-scan
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      contains(join(github.event.commits.*.modified, ','), 'terraform/environments/github/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
