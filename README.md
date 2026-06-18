@@ -16,78 +16,8 @@ The core workload is a **full-stack banking application** with a Next.js (TypeSc
 
 ## Architecture
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              AWS Cloud (us-east-1)                         │
-│                                                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                     VPC (10.0.0.0/16)                              │   │
-│  │                                                                     │   │
-│  │  ┌──────────────────────┐    ┌──────────────────────┐              │   │
-│  │  │  Public Subnets      │    │  Private Subnets      │              │   │
-│  │  │  ┌────────────────┐  │    │  ┌──────────────────┐ │              │   │
-│  │  │  │ NAT Gateway    │  │    │  │  Amazon EKS      │ │              │   │
-│  │  │  │ ALB / Ingress  │──│────│──│                  │ │              │   │
-│  │  │  └────────────────┘  │    │  │  ┌────────────┐ │ │              │   │
-│  │  └──────────────────────┘    │  │  │  banking   │ │ │              │   │
-│  │                              │  │  │  namespace │ │ │              │   │
-│  │                              │  │  │            │ │ │              │   │
-│  │                              │  │  │ trading-   │ │ │              │   │
-│  │                              │  │  │ simulator  │ │ │              │   │
-│  │                              │  │  │ (Express)  │ │ │              │   │
-│  │                              │  │  └──────┬─────┘ │ │              │   │
-│  │                              │  └─────────│───────┘ │              │   │
-│  │                              └────────────│─────────┘              │   │
-│  └───────────────────────────────────────────│─────────────────────────┘   │
-│                                              │                            │
-│  ┌───────────────────────────────────────────│─────────────────────────┐   │
-│  │              Observability (three pillars)│                         │   │
-│  │                                           │                         │   │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌─────▼───────┐               │   │
-│  │  │ Metrics     │  │ Logging      │  │ Tracing     │               │   │
-│  │  │             │  │              │  │             │               │   │
-│  │  │ Prometheus  │  │ Fluent Bit   │  │ OpenTelemetry               │   │
-│  │  │ Grafana     │  │ OpenSearch   │  │ Jaeger      │               │   │
-│  │  │ AlertManager│  │ Dashboards   │  │             │               │   │
-│  │  └─────────────┘  └──────────────┘  └─────────────┘               │   │
-│  └────────────────────────────────────────────────────────────────────┘   │
-│                                                                           │
-│  ┌────────────────────────────────────────────────────────────────────┐   │
-│  │                   Security Controls                                │   │
-│  │  RBAC · Network Policies · Pod Security Standards · Kyverno       │   │
-│  │  Secret Scanning · SAST · DAST · Container Scanning · IaC Scan    │   │
-│  └────────────────────────────────────────────────────────────────────┘   │
-│                                                                           │
-│  Amazon ECR ◄──── GitHub Actions CI/CD ────► ArgoCD (GitOps)             │
-└─────────────────────────────────────────────────────────────────────────────┘
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/eaa99d49-d661-47bb-87f5-5873879f45a6" />
 
-                     CI/CD Pipeline Flow
-                     ═══════════════════
-
-  Code Push ──► Lint/Test ──► Secret Scan ──► SAST ──► Dependency Scan
-       │                                                      │
-       │         IaC Scan ◄───────────────────────────────────┘
-       │              │
-       │              ▼
-       │     Container Build ──► Container Scan ──► Push to ECR
-       │                                                │
-       │                                                ▼
-       │                              Deploy Dev ──► Integration Tests
-       │                                    │              │
-       │                                    ▼              ▼
-       │                           Deploy Staging ──► DAST Scan
-       │                                    │              │
-       │                                    ├──► Performance Test (k6)
-       │                                    │              │
-       │                                    └──► Synthetic Monitoring
-       │                                                │
-       │                                                ▼
-       └─────────────────────────────────── Deploy Production ──► Validate
-                                                                    │
-                                                             Rollback (on failure)
-```
-
----
 
 
 ## Technology Stack
