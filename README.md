@@ -1,3 +1,7 @@
+<img width="1254" height="1254" alt="image" src="https://github.com/user-attachments/assets/722c15fa-08da-4167-b5de-44738d849c20" />
+
+
+
 # Project Sentinel
 
 ## Enterprise DevSecOps Platform for Financial Services
