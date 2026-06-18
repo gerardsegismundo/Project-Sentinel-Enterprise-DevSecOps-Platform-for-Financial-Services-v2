@@ -176,8 +176,13 @@ jobs:
       - name: Tag and push to ECR
         if: steps.login-ecr.outcome == 'success'
         run: |
-          docker tag ${{ env.LOCAL_IMAGE }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          FULL_IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          if aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} --image-ids imageTag=${{ env.IMAGE_TAG }} --region ${{ env.AWS_REGION }} > /dev/null 2>&1; then
+            echo "::notice::Image ${{ env.IMAGE_TAG }} already exists in ECR — skipping push"
+          else
+            docker tag ${{ env.LOCAL_IMAGE }} $FULL_IMAGE
+            docker push $FULL_IMAGE
+          fi
       - name: ECR push skipped
         if: steps.login-ecr.outcome == 'skipped'
         run: echo "::warning::AWS credentials not configured — ECR push skipped. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in GitHub Secrets to enable."
