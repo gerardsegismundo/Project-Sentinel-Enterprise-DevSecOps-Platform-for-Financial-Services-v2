@@ -1,0 +1,72 @@
+name: Deploy Production (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (commit SHA from a passing CI run)'
+        required: true
+        type: string
+      confirm:
+        description: 'Type DEPLOY to confirm production deployment'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  HELM_CHART_PATH: helm/banking-app
+  CLUSTER_PROD: project-sentinel-prod
+
+jobs:
+  guard:
+    name: Confirm Intent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation input
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY" ]; then
+            echo "::error::Confirmation input must be exactly 'DEPLOY'. Got: ${{ github.event.inputs.confirm }}"
+            exit 1
+          fi
+
+  deploy-production:
+    name: Deploy Production
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Check prod cluster exists
+        if: ${{ env.HAS_AWS_CREDS == 'true' }}
+        env:
+          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name "${{ env.CLUSTER_PROD }}" --region "${{ env.AWS_REGION }}" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::Production cluster not found — skipping"
+          fi
+      - name: Deploy to EKS (production)
+        if: steps.cluster-check.outputs.exists == 'true'
+        uses: ./.github/actions/helm-deploy
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          cluster-name: ${{ env.CLUSTER_PROD }}
+          chart-path: ${{ env.HELM_CHART_PATH }}
+          values-file: ${{ env.HELM_CHART_PATH }}/values.yaml
+          image-tag: ${{ github.event.inputs.image_tag }}
+      - name: Verify rollout
+        if: steps.cluster-check.outputs.exists == 'true'
+        run: kubectl rollout status deployment/trading-simulator -n banking --timeout=5m
