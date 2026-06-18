@@ -390,58 +390,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Scan deployed app
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        uses: ./.github/actions/aws-eks-setup
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          cluster-name: ${{ env.CLUSTER_DEV }}
-          install-kubectl: 'false'
-      - name: Get service endpoint
-        if: ${{ env.HAS_AWS_CREDS == 'true' }}
-        id: service
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        run: |
-          SERVICE_IP=$(kubectl get svc trading-simulator -n banking -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          if [ -z "$SERVICE_IP" ]; then
-            echo "::error::Could not resolve service endpoint for trading-simulator"
-            exit 1
-          fi
-          echo "endpoint=http://$SERVICE_IP" >> $GITHUB_OUTPUT
-      - name: Run OWASP ZAP Scan (deployed)
-        if: steps.service.outcome == 'success'
-        uses: zaproxy/action-full-scan@v0.12.0
-        continue-on-error: true
-        with:
-          target: ${{ steps.service.outputs.endpoint }}
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a'
-          allow_issue_writing: false
-      - name: DAST scan (local)
-        if: ${{ env.HAS_AWS_CREDS != 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Start local app and run ZAP
-        if: ${{ env.HAS_AWS_CREDS != 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+          cache: 'npm'
+          cache-dependency-path: ./app/package-lock.json
+      - name: Start local app
+        working-directory: ./app
         run: |
-          cd app && npm ci
-          node src/index.js &
-          sleep 3
-          echo "::notice::Running DAST scan against local app on http://localhost:3000"
-      - name: Run OWASP ZAP Scan (local)
-        if: ${{ env.HAS_AWS_CREDS != 'true' }}
-        env:
-          HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+          npm ci
+          node dist/index.js &
+          sleep 5
+      - name: Run OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.12.0
         continue-on-error: true
         with:
@@ -476,8 +436,9 @@ jobs:
         working-directory: ./app
         run: |
           npm ci
-          node src/index.js &
-          sleep 3
+          npm run build
+          node dist/index.js &
+          sleep 5
       - name: Run k6 load test
         run: k6 run --out json=k6-results.json app/tests/performance/load-test.js
         env:
@@ -502,12 +463,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: ./app/package-lock.json
-      - name: Start local app
+      - name: Build and start local app
         working-directory: ./app
         run: |
           npm ci
-          node src/index.js &
-          sleep 3
+          npm run build
+          node dist/index.js &
+          sleep 5
       - name: Run synthetic health checks
         run: node app/tests/synthetic/health-check.js
         env:
