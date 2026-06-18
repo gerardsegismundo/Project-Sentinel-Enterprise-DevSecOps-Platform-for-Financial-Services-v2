@@ -48,6 +48,16 @@ runs:
     - shell: bash
       env:
         RELEASE_NAME: ${{ inputs.release-name }}
+        NAMESPACE: ${{ inputs.namespace }}
+      run: |
+        STATUS=$(helm status "$RELEASE_NAME" -n "$NAMESPACE" -o json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['status'])" 2>/dev/null || echo "not-found")
+        if [[ "$STATUS" == "pending-install" || "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-rollback" ]]; then
+          echo "::warning::Release $RELEASE_NAME is in $STATUS state — rolling back to clear lock"
+          helm rollback "$RELEASE_NAME" -n "$NAMESPACE" || helm uninstall "$RELEASE_NAME" -n "$NAMESPACE" || true
+        fi
+    - shell: bash
+      env:
+        RELEASE_NAME: ${{ inputs.release-name }}
         CHART_PATH: ${{ inputs.chart-path }}
         VALUES_FILE: ${{ inputs.values-file }}
         IMAGE_TAG: ${{ inputs.image-tag }}
