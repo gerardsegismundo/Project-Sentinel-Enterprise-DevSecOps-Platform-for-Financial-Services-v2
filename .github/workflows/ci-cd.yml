@@ -644,3 +644,5 @@ jobs:
         env:
           HAS_AWS_CREDS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         run: echo "::warning::AWS credentials not configured — rollback skipped."
+
+        ## Additional jobs for notifications, monitoring, etc. can be added here
