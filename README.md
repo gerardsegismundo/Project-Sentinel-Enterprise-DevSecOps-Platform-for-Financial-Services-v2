@@ -322,3 +322,9 @@ Detailed control mappings are in `docs/compliance/`.
 ## ⚠️ Disclaimer
 
 This project is intended for educational and demonstration purposes as a DevSecOps capstone project. It showcases industry best practices for secure cloud-native application delivery and platform engineering.
+
+## 📄 License
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
